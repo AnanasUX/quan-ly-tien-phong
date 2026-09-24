@@ -53,8 +53,8 @@ def load_env_file():
 
 load_env_file()
 
-# --- TOKEN MỚI (cập nhật 09/2026) ---
-TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "8502160323:AAGsdR-4pW5qxpghvA7ztnvBUSxycTPP0eg")
+# --- CẤU HÌNH BẢO MẬT: Đọc 100% từ biến môi trường, KHÔNG hardcode token ---
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 ZALO_WEBHOOK_URL   = os.environ.get("ZALO_WEBHOOK_URL", "https://hook.eu1.make.com/9ruvgdciavfa1k6xf2vzpkn6zk2umnc7")
 CALENDAR_ID        = os.environ.get("CALENDAR_ID", "mrkun28@gmail.com")
 
@@ -63,6 +63,9 @@ OPENWEATHER_API_KEY  = os.environ.get("OPENWEATHER_API_KEY", "a201c471567522a7d0
 POWERPOINT_FOLDER_ID = os.environ.get("POWERPOINT_FOLDER_ID", "1BwFCLX0Fjag9xM13mHIJTOYvZ6dYW5Ox")
 DOC_LOGIC_ID         = os.environ.get("DOC_LOGIC_ID", "1a9_qNqFEpbmuIoKuEvT3cExHzpszov4THOfm1ztCZc8")
 DOC_NEWS_ID          = os.environ.get("DOC_NEWS_ID", "NHẬP_ID_FILE_DOCS_TIN_TỨC_VÀO_ĐÂY")
+
+if not TELEGRAM_BOT_TOKEN:
+    raise RuntimeError("❌ TELEGRAM_BOT_TOKEN chưa được cấu hình trong biến môi trường!")
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AQ.Ab8RN6IBgzuK4JMCYVYWqDeRpTsOgfqxIWnUxw82IBe49xb-sA")
 
