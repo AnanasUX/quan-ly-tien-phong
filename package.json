@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "format": "oxfmt"
+    "format": "oxfmt",
+    "deploy": "gh-pages -d dist -r https://github.com/AnanasUX/quan-ly-tien-phong.git"
   },
   "dependencies": {
     "lz-string": "^1.5.0",
@@ -20,9 +21,11 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^6.0.0",
+    "gh-pages": "^6.3.0",
     "oxfmt": "^0.2.0",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.7.0",
     "vite": "^8.0.5"
-  }
+  },
+  "homepage": "https://ananasux.github.io/quan-ly-tien-phong"
 }

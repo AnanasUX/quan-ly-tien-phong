@@ -567,7 +567,7 @@ export default function App() {
       try {
         const decoded = LZString.decompressFromEncodedURIComponent(d);
         if (decoded) {
-            setData(JSON.parse(decoded));
+            setData({ ...defaultData, ...JSON.parse(decoded) });
         }
       } catch (e) {
         console.error(e);
