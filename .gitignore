@@ -1,0 +1,19 @@
+﻿# Environment & Secrets
+.env
+*.env
+credentials.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.class
+*.so
+.Python
+env/
+venv/
+ENV/
+
+# Bot local database & runtime logs
+bot_data.json
+core_logic_memory.txt
+*.log
