@@ -451,6 +451,132 @@ def trich_xuat_so_tuan(ten_thu_muc):
     match = re.search(r'(?i)tuan\s*(\d+)', ten_thu_muc)
     return int(match.group(1)) if match else 999
 
+SHEETS_ID = os.environ.get("SHEETS_ID", "1Rvz9rfQY6cH4sfIHQ8yIM6eykdiNJEXGseH03qPaf8I")
+
+def day_du_lieu_google_sheets():
+    """Quét Drive rồi ghi vào Google Sheets theo cấu trúc A(STT) B(Thư mục cha) C(File gốc) D(File đã làm) E(Trạng thái).
+    Mỗi lần gọi sẽ xóa dữ liệu cũ rồi ghi mới từ hàng 3.
+    """
+    if not GOOGLE_API_AVAILABLE or not os.path.exists('credentials.json'):
+        return False, "Không tìm thấy credentials.json"
+
+    try:
+        creds         = Credentials.from_service_account_file('credentials.json', scopes=GOOGLE_SCOPES)
+        drive_service = build('drive', 'v3', credentials=creds)
+        sheets_service = build('sheets', 'v4', credentials=creds)
+
+        # ── 1. Quét Drive (logic giống tao_bao_cao_powerpoint) ──────────────
+        query_main = (f"'{POWERPOINT_FOLDER_ID}' in parents and trashed=false "
+                      f"and mimeType='application/vnd.google-apps.folder'")
+        results     = drive_service.files().list(q=query_main, fields="files(id, name)", pageSize=1000).execute()
+        raw_folders = results.get('files', [])
+        main_folders = sorted(raw_folders, key=lambda x: (trich_xuat_so_tuan(x['name']), x['name']))
+
+        rows = []   # Mỗi phần tử: (folder_name, orig_file, processed_file_or_none)
+        stt  = 1
+
+        for main_folder in main_folders:
+            folder_name = main_folder['name']
+            folder_id   = main_folder['id']
+
+            if not ("TUAN" in folder_name.upper() or "KNTT" in folder_name.upper()):
+                continue
+
+            match_tuan = re.search(r'(?i)tuan\s*(\d+)', folder_name)
+            tien_to    = f"Tuan{match_tuan.group(1)}_" if match_tuan else ""
+
+            query_sub   = f"'{folder_id}' in parents and trashed=false"
+            sub_results = drive_service.files().list(
+                q=query_sub, fields="files(id, name, mimeType)", pageSize=1000
+            ).execute()
+
+            thu_muc_goc_id  = None
+            processed_files = []
+
+            for item in sub_results.get('files', []):
+                if item['mimeType'] == 'application/vnd.google-apps.folder':
+                    if item['name'].strip().lower() == "thu_muc_goc":
+                        thu_muc_goc_id = item['id']
+                elif item['name'].lower().endswith('.pptx'):
+                    processed_files.append(item['name'])
+
+            if thu_muc_goc_id:
+                orig_results = drive_service.files().list(
+                    q=(f"'{thu_muc_goc_id}' in parents and trashed=false "
+                       f"and mimeType!='application/vnd.google-apps.folder'"),
+                    fields="files(name)", pageSize=1000
+                ).execute()
+                original_files  = sorted([f['name'] for f in orig_results.get('files', [])
+                                          if f['name'].lower().endswith('.pptx')])
+                processed_files = sorted(processed_files)
+                matched_processed = set()
+
+                for orig in original_files:
+                    orig_clean = re.sub(r'\s+', '', re.sub(r'(?i)\.pptx$', '', orig).strip().lower())
+                    found = None
+                    for proc in processed_files:
+                        proc_clean = re.sub(r'\s+', '', re.sub(r'(?i)\.pptx$', '', proc).strip().lower())
+                        if orig_clean in proc_clean:
+                            found = proc
+                            break
+                    # C = file gốc (thu_muc_goc), D = file đã xử lý
+                    if found:
+                        rows.append([stt, folder_name, orig, found, "hoàn thành"])
+                        matched_processed.add(found)
+                    else:
+                        # D = tên dự kiến (chưa tồn tại)
+                        expected = (tien_to + orig) if (tien_to and not orig.lower().startswith(tien_to.lower())) else orig
+                        rows.append([stt, folder_name, orig, expected, "chưa làm"])
+                    stt += 1
+
+                # File processed không khớp gốc nào (thừa)
+                for proc in processed_files:
+                    if proc not in matched_processed:
+                        expected_orig = re.sub(r'(?i)^tuan\d+_', '', proc) if tien_to else proc
+                        rows.append([stt, folder_name, expected_orig, proc, "hoàn thành"])
+                        stt += 1
+            else:
+                # Không có thu_muc_goc → liệt kê processed_files trực tiếp
+                for proc in sorted(processed_files):
+                    rows.append([stt, folder_name, "", proc, "hoàn thành"])
+                    stt += 1
+
+        # ── 2. Ghi vào Google Sheets ─────────────────────────────────────────
+        sheet = sheets_service.spreadsheets()
+
+        # Xóa toàn bộ dữ liệu cũ (giữ lại hàng header 1-2)
+        sheet.values().clear(
+            spreadsheetId=SHEETS_ID,
+            range="Sheet1!A3:Z"
+        ).execute()
+
+        # Ghi header hàng 1-2 (nếu chưa có)
+        headers = [
+            ["BÁO CÁO TIẾN ĐỘ POWERPOINT", "", "", "", ""],
+            ["STT", "Thư mục cha (Drive)", "File gốc (thu_muc_goc)", "File đã làm", "Trạng thái"]
+        ]
+        sheet.values().update(
+            spreadsheetId=SHEETS_ID,
+            range="Sheet1!A1:E2",
+            valueInputOption="RAW",
+            body={"values": headers}
+        ).execute()
+
+        # Ghi dữ liệu từ hàng 3
+        if rows:
+            sheet.values().update(
+                spreadsheetId=SHEETS_ID,
+                range=f"Sheet1!A3:E{2 + len(rows)}",
+                valueInputOption="RAW",
+                body={"values": rows}
+            ).execute()
+
+        return True, f"Đã ghi {len(rows)} dòng vào Google Sheets."
+
+    except Exception as e:
+        return False, str(e)
+
+
 def tao_bao_cao_powerpoint():
     if not GOOGLE_API_AVAILABLE or not os.path.exists('credentials.json'):
         return "⚠️ Lỗi hệ thống: Không tìm thấy file <code>credentials.json</code>. Vui lòng thêm file này vào thư mục chứa code."
@@ -1465,6 +1591,14 @@ def xu_ly_telegram_update(data):
             def tien_trinh_baocao_va_huy():
                 try:
                     bao_cao_html = tao_bao_cao_powerpoint()
+                    
+                    # Gọi hàm đồng bộ Google Sheets
+                    sheets_success, sheets_msg = day_du_lieu_google_sheets()
+                    if sheets_success:
+                        bao_cao_html += f"\n\n✅ <b>Đồng bộ Google Sheets:</b> Thành công ({sheets_msg})"
+                    else:
+                        bao_cao_html += f"\n\n⚠️ <b>Đồng bộ Google Sheets:</b> Thất bại ({sheets_msg})"
+                        
                     for w_id in wait_msg_ids:
                         xoa_tin_nhan(chat_id, w_id)
                     new_ids = gui_tin_nhan_telegram(chat_id, bao_cao_html, parse_mode="HTML", disable_noti=True)
@@ -1475,7 +1609,8 @@ def xu_ly_telegram_update(data):
                         xoa_tin_nhan(chat_id, m_id)
                     last_report_msgs[chat_id] = []
                     save_data()
-                except:
+                except Exception as e:
+                    print("Lỗi khi chạy báo cáo:", e)
                     pass
             threading.Thread(target=tien_trinh_baocao_va_huy, daemon=True).start()
             return
@@ -1662,13 +1797,18 @@ def xu_ly_telegram_update(data):
                     encoded = _b64.urlsafe_b64encode(
                         _json.dumps(data_payload, ensure_ascii=False).encode('utf-8')
                     ).decode('ascii')
-                    url = f"{WEBSITE_URL.rstrip('/')}/?data={encoded}"
+                    
+                    website_base = WEBSITE_URL.strip()
+                    if not website_base:
+                        website_base = "https://ananasux.github.io/quan-ly-tien-phong/"
+                    
+                    url = f"{website_base.rstrip('/')}/?data={encoded}"
 
                     gui_tin_nhan_telegram(
                         chat_id,
                         f"✅ <b>Giao Diện Web Thời Tiết – Dữ Liệu Thực Tế</b>\n\n"
                         f"📍 {ten} | 🌡️ {c_temp}°C | {c_icon}\n\n"
-                        f"🌐 Mở website:\n<a href='{url}'>{WEBSITE_URL}</a>",
+                        f"🌐 Mở website:\n👉 <a href='{url}'>Nhấn vào đây để xem giao diện</a>",
                         parse_mode="HTML"
                     )
                 except Exception as e:
