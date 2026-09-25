@@ -1729,7 +1729,7 @@ def xu_ly_telegram_update(data):
                     import base64 as _b64
                     import json as _json
 
-                    WEBSITE_URL = os.environ.get("WEBSITE_URL", "https://ananasux.github.io/quan-ly-tien-phong/")
+                    WEBSITE_URL = os.environ.get("WEBSITE_URL", "https://ananasux.github.io/Website_thoitiet_design/")
 
                     # ── 1. Lấy dữ liệu thời tiết thực tế ──
                     lat = admin_location.get("lat", 20.9716)
@@ -1798,7 +1798,7 @@ def xu_ly_telegram_update(data):
                     
                     website_base = WEBSITE_URL.strip()
                     if not website_base:
-                        website_base = "https://ananasux.github.io/quan-ly-tien-phong/"
+                        website_base = "https://ananasux.github.io/Website_thoitiet_design/"
                     
                     url = f"{website_base.rstrip('/')}/?data={encoded}"
 
