@@ -804,7 +804,7 @@ def lay_bang_diem_ngap(muc_do="NHE", rain_1h=0):
         ("Tân Triều", 30, 50, "Triều Khúc, ngõ 66", "Ngập lút bánh xe")
     ]
 
-    random.seed(datetime.now().strftime("%Y%m%d%H"))
+    random.seed(datetime.datetime.now().strftime("%Y%m%d%H"))
     so_diem = random.randint(1, 2) if muc_do == "NHE" else random.randint(3, 5)
     diem_thuc_te = random.sample(ds, min(so_diem, len(ds)))
 
