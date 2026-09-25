@@ -1891,13 +1891,17 @@ def xu_ly_telegram_update(data):
                     raw_url = f"{website_base.rstrip('/')}/?data={encoded}"
                     url_to_send = raw_url
 
-                    # Gọi API rút gọn link (TinyURL) để lách luật độ dài của Telegram
+                    # Dùng is.gd để rút gọn (is.gd không bị màn hình preview như TinyURL)
                     try:
-                        tiny_res = requests.get(f"http://tinyurl.com/api-create.php?url={raw_url}", timeout=5)
-                        if tiny_res.status_code == 200 and tiny_res.text.startswith("http"):
-                            url_to_send = tiny_res.text
-                    except Exception:
+                        import urllib.parse
+                        isgd_res = requests.get(f"https://is.gd/create.php?format=simple&url={urllib.parse.quote(raw_url)}", timeout=5)
+                        if isgd_res.status_code == 200 and isgd_res.text.startswith("http"):
+                            url_to_send = isgd_res.text.strip()
+                    except:
                         pass
+
+
+
 
                     gui_tin_nhan_telegram(
                         chat_id,
