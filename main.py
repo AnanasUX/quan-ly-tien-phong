@@ -1826,8 +1826,24 @@ def xu_ly_telegram_update(data):
                     trang_thai = xac_dinh_trang_thai_thoi_tiet(c_temp, feels_like, c_desc, n_pop, humidity)
 
 
+
                     warningText = ""
                     suggestionItems = []
+                    floodItems = []
+                    routeItems = []
+                    
+                    if trang_thai in ["MUA_NHE", "RONG_BAO"]:
+                        try:
+                            # Use 20 for rain_1h if RONG_BAO to ensure we hit max values if we want mock data, or use cur.rain.1h if we have it
+                            # Actually, get_diem_ngap_ha_noi takes rain_1h. We can just use 50 to guarantee mock data for RONG_BAO
+                            txt_ngap, txt_tranh = lay_bang_diem_ngap(muc_do=("TO" if trang_thai=="RONG_BAO" else "NHE"), rain_1h=50)
+                            if txt_ngap:
+                                floodItems = txt_ngap.split("\n")
+                            if txt_tranh:
+                                routeItems = txt_tranh.split("\n")
+                        except:
+                            pass
+
                     
                     if trang_thai == "BINH_THUONG":
                         suggestionItems = ["Điều khiển phương tiện: Giao thông thuận lợi, chú ý tốc độ theo quy định.", "Trang bị: Không cần trang bị đặc biệt."]
@@ -1903,6 +1919,8 @@ def xu_ly_telegram_update(data):
                         },
                         "warningText": warningText,
                         "suggestionItems": suggestionItems,
+                        "floodItems": floodItems,
+                        "routeItems": routeItems,
                         "video": video_data,
                         "news": tin_tuc
                     }
