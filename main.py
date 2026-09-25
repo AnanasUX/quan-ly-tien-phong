@@ -18,6 +18,34 @@ import urllib.parse
 import threading
 import traceback
 import html
+
+def extract_og_image(url):
+    import requests
+    from bs4 import BeautifulSoup
+    try:
+        res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=3)
+        if res.status_code == 200:
+            soup = BeautifulSoup(res.text, "html.parser")
+            og = soup.find("meta", property="og:image")
+            if og and og.get("content"):
+                return og["content"]
+            tw = soup.find("meta", attrs={"name": "twitter:image"})
+            if tw and tw.get("content"):
+                return tw["content"]
+    except:
+        pass
+    return None
+
+def dien_anh_cho_danh_sach(ds_bai):
+    import concurrent.futures
+    def get_img(bai):
+        if not bai.get("image"):
+            bai["image"] = extract_og_image(bai["link"])
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        executor.map(get_img, ds_bai)
+    return ds_bai
+
+
 from bs4 import BeautifulSoup
 from flask import Flask, request, jsonify
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -1221,7 +1249,7 @@ def job_tu_dong_day_tin():
             if len(chua_gui) < 5:
                 sent_articles_set[chat_str].clear()
                 chua_gui = tat_ca_tin
-            ds_bai = chua_gui[:5]
+            ds_bai = dien_anh_cho_danh_sach(chua_gui[:5])
             if not ds_bai:
                 continue
 
@@ -1851,7 +1879,7 @@ def xu_ly_telegram_update(data):
                         
 
                     # ── 2. Lấy tin tức (giảm còn 5 bài để URL không vượt quá 4000 ký tự của Telegram) ──
-                    tin_tuc = lay_tat_ca_bai_viet_ngau_nhien(sort_by_date=True)[:5]
+                    tin_tuc = dien_anh_cho_danh_sach(lay_tat_ca_bai_viet_ngau_nhien(sort_by_date=True)[:5])
 
                     # ── 3. Đóng gói data ──
                     data_payload = {
