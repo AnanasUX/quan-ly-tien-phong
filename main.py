@@ -1098,10 +1098,15 @@ def cap_nhat_trang_thai_thoi_tiet():
 
 def tim_toa_do_theo_ten(ten_dia_diem):
     try:
-        url = f"https://nominatim.openstreetmap.org/search?q={urllib.parse.quote(ten_dia_diem)}&format=json&limit=1"
-        res = requests.get(url, headers={"User-Agent": "AnXBot/1.0"}, timeout=10).json()
-        if res:
-            return {"thanh_cong": True, "lat": float(res[0]["lat"]), "lon": float(res[0]["lon"]), "name": res[0].get("display_name", ten_dia_diem)}
+        import urllib.parse
+        url = f"http://api.openweathermap.org/geo/1.0/direct?q={urllib.parse.quote(ten_dia_diem)}&limit=1&appid={OPENWEATHER_API_KEY}"
+        res = requests.get(url, timeout=10).json()
+        if res and isinstance(res, list) and len(res) > 0:
+            item = res[0]
+            name = item.get("local_names", {}).get("vi", item.get("name", ten_dia_diem))
+            if "country" in item:
+                name = f"{name}, {item['country']}"
+            return {"thanh_cong": True, "lat": float(item["lat"]), "lon": float(item["lon"]), "name": name}
     except:
         pass
     return {"thanh_cong": False}
