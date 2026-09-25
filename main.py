@@ -1916,7 +1916,12 @@ def xu_ly_telegram_update(data):
                         
 
                     # ── 2. Lấy tin tức (giảm còn 5 bài để URL không vượt quá 4000 ký tự của Telegram) ──
-                    tin_tuc = dien_anh_cho_danh_sach(lay_tat_ca_bai_viet_ngau_nhien(sort_by_date=True)[:5])
+                    tin_tuc_raw = lay_bai_viet_moi_chua_gui(str(chat_id), so_luong=10)
+                    tin_tuc = dien_anh_cho_danh_sach(tin_tuc_raw)
+                    for t in tin_tuc:
+                        if 'description' in t and len(t['description']) > 150:
+                            t['description'] = t['description'][:147] + "..."
+
 
                     # ── 3. Đóng gói data ──
                     data_payload = {
@@ -1958,14 +1963,7 @@ def xu_ly_telegram_update(data):
                     raw_url = f"{website_base.rstrip('/')}/?data={encoded}"
                     url_to_send = raw_url
 
-                    # Dùng is.gd để rút gọn (is.gd không bị màn hình preview như TinyURL)
-                    try:
-                        import urllib.parse
-                        isgd_res = requests.get(f"https://is.gd/create.php?format=simple&url={urllib.parse.quote(raw_url)}", timeout=5)
-                        if isgd_res.status_code == 200 and isgd_res.text.startswith("http"):
-                            url_to_send = isgd_res.text.strip()
-                    except:
-                        pass
+
 
 
 
