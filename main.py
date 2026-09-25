@@ -1677,19 +1677,35 @@ def xu_ly_telegram_update(data):
                 user_sessions[chat_id]["step"] = None
             ten_vung = text.replace("/vung", "").strip()
             if not ten_vung:
+                m_ids = gui_tin_nhan_telegram(chat_id, "⚠️ Vui lòng nhập tên vùng. Ví dụ: <code>/vung Hà Nội</code>", parse_mode="HTML")
+                xoa_tin_nhan_sau_delay(chat_id, m_ids, 5)
                 return
-            kq = tim_toa_do_theo_ten(ten_vung)
-            if kq.get("thanh_cong"):
-                admin_location["lat"]  = kq["lat"]
-                admin_location["lon"]  = kq["lon"]
-                admin_location["name"] = kq["name"]
-                save_data()
-                m_ids = gui_tin_nhan_telegram(
-                    chat_id,
-                    f"✅ Đã chuyển vùng mặc định: <b>{escape_html(kq['name'])}</b>",
-                    parse_mode="HTML"
-                )
-                xoa_tin_nhan_sau_delay(chat_id, m_ids, 10)
+            
+            wait_ids = gui_tin_nhan_telegram(chat_id, "⏳ <i>Hệ thống đang xử lý, vui lòng chờ...</i>", parse_mode="HTML", disable_noti=True)
+            
+            def wrapper_vung():
+                kq = tim_toa_do_theo_ten(ten_vung)
+                for wid in wait_ids: xoa_tin_nhan(chat_id, wid)
+                
+                if kq.get("thanh_cong"):
+                    admin_location["lat"]  = kq["lat"]
+                    admin_location["lon"]  = kq["lon"]
+                    admin_location["name"] = kq["name"]
+                    save_data()
+                    m_ids = gui_tin_nhan_telegram(
+                        chat_id,
+                        f"✅ Đã chuyển vùng mặc định: <b>{escape_html(kq['name'])}</b>",
+                        parse_mode="HTML"
+                    )
+                    xoa_tin_nhan_sau_delay(chat_id, m_ids, 10)
+                else:
+                    gui_tin_nhan_telegram(
+                        chat_id,
+                        f"❌ Không tìm thấy tọa độ cho vùng: <b>{escape_html(ten_vung)}</b>. Vui lòng thử tên khác (ví dụ: Hanoi, Vietnam).",
+                        parse_mode="HTML"
+                    )
+                    
+            threading.Thread(target=wrapper_vung, daemon=True).start()
             return
 
         # ── Menu chính ──
