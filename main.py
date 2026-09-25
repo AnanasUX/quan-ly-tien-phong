@@ -1599,9 +1599,9 @@ def xu_ly_telegram_update(data):
                     # Gọi hàm đồng bộ Google Sheets
                     sheets_success, sheets_msg = day_du_lieu_google_sheets()
                     if sheets_success:
-                        bao_cao_html += f"\n\n✅ <b>Đồng bộ Google Sheets:</b> Thành công ({sheets_msg})"
+                        bao_cao_html += f"\n\n✅ <b>Đồng bộ Google Sheets:</b> Thành công ({escape_html(sheets_msg)})"
                     else:
-                        bao_cao_html += f"\n\n⚠️ <b>Đồng bộ Google Sheets:</b> Thất bại ({sheets_msg})"
+                        bao_cao_html += f"\n\n⚠️ <b>Đồng bộ Google Sheets:</b> Thất bại ({escape_html(sheets_msg)})"
                         
                     for w_id in wait_msg_ids:
                         xoa_tin_nhan(chat_id, w_id)
