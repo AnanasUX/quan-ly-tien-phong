@@ -1078,7 +1078,7 @@ def tim_toa_do_theo_ten(ten_dia_diem):
         pass
     return {"thanh_cong": False}
 
-def lay_tat_ca_bai_viet_ngau_nhien():
+def lay_tat_ca_bai_viet_ngau_nhien(sort_by_date=False):
     danh_sach_tong  = []
     headers         = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
     nguon_rss       = [val for val in DANH_SACH_TRANG.values()]
@@ -1107,6 +1107,11 @@ def lay_tat_ca_bai_viet_ngau_nhien():
                     raw_desc  = item.description.text.strip() if item.description else ""
                     desc      = html.unescape(raw_desc)
                     link      = item.link.text.strip() if item.link else ""
+                    import email.utils
+                    try:
+                        ts = email.utils.parsedate_to_datetime(item.pubDate.text).timestamp() if item.pubDate else 0
+                    except:
+                        ts = 0
                     img_url   = None
                     enc       = item.find('enclosure')
                     if enc and 'url' in enc.attrs:
@@ -1127,11 +1132,15 @@ def lay_tat_ca_bai_viet_ngau_nhien():
                         danh_sach_tong.append({
                             "title": title, "description": c_desc,
                             "link": link,   "image": img_url,
-                            "author": t_info["ten"], "source": t_info["ten"]
+                            "author": t_info["ten"], "source": t_info["ten"],
+                            "timestamp": ts
                         })
             except:
                 continue
-    random.shuffle(danh_sach_tong)
+    if sort_by_date:
+        danh_sach_tong.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
+    else:
+        random.shuffle(danh_sach_tong)
     return danh_sach_tong
 
 def lay_bai_viet_moi_chua_gui(chat_id_str, so_luong=5):
@@ -1788,8 +1797,61 @@ def xu_ly_telegram_update(data):
 
                     trang_thai = xac_dinh_trang_thai_thoi_tiet(c_temp, feels_like, c_desc, n_pop, humidity)
 
+
+                    warningText = ""
+                    suggestionItems = []
+                    
+                    if trang_thai == "BINH_THUONG":
+                        suggestionItems = ["Điều khiển phương tiện: Giao thông thuận lợi, chú ý tốc độ theo quy định.", "Trang bị: Không cần trang bị đặc biệt."]
+                    elif trang_thai == "MUA_NHE":
+                        warningText = "Mưa nhỏ, đường trơn trượt nhẹ. Có thể che khuất tầm nhìn."
+                        suggestionItems = ["Điều khiển phương tiện: Giảm tốc độ, giữ khoảng cách an toàn.", "Trang bị: Mang theo áo mưa mỏng hoặc ô dự phòng."]
+                    elif trang_thai == "RONG_BAO":
+                        warningText = "Mưa dông kèm sấm chớp, gió giật mạnh cục bộ. Nguy cơ ngập úng nhanh, cây đổ, mất điện.\nDự báo ngắn: Xác suất mưa dông trong 3h tới vẫn cao, có thể xuất hiện gió mạnh."
+                        suggestionItems = ["Điều khiển phương tiện: Tuyệt đối không đi dưới cây lớn, biển quảng cáo. Giảm tốc độ mạnh, bật đèn sương mù nếu có.", "Trang bị: Áo mưa bộ rời, ủng cao su, tránh dùng ô (dễ lật)."]
+                    elif trang_thai == "NANG_GAT":
+                        warningText = "Nắng nóng gay gắt, nguy cơ say nắng, sốc nhiệt cao. Tia UV ở mức nguy hiểm."
+                        suggestionItems = ["Điều khiển phương tiện: Tránh di chuyển khung giờ 11h-15h. Đeo kính râm che chắn tốt.", "Trang bị: Áo chống nắng dày, bôi kem chống nắng, mang theo nước uống."]
+                    elif trang_thai == "AM_U":
+                        suggestionItems = ["Điều khiển phương tiện: Bật đèn chiếu gần (đèn sương mù) để tăng độ nhận diện. Chú ý quan sát.", "Trang bị: Mang theo áo mưa dự phòng vì có thể mưa bất chợt."]
+                    elif trang_thai == "NANG":
+                        warningText = "Trời nắng đẹp, tầm nhìn tốt. Chỉ số UV ở mức trung bình đến cao."
+                        suggestionItems = ["Điều khiển phương tiện: Tầm nhìn xa tốt, lái xe bình thường.", "Trang bị: Mang theo kính mát, áo khoác mỏng nếu di chuyển lâu."]
+
+                    video_data = None
+                    try:
+                        url_yt = "https://www.youtube.com/feeds/videos.xml?channel_id=UCabsTV34JwALXKGMqHpvUiA"
+                        res_yt = requests.get(url_yt, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+                        res_yt.encoding = 'utf-8'
+                        if res_yt.status_code == 200:
+                            try:
+                                from bs4 import BeautifulSoup
+                                soup_yt = BeautifulSoup(res_yt.text, 'xml')
+                            except:
+                                soup_yt = BeautifulSoup(res_yt.text, 'html.parser')
+                            entries = soup_yt.find_all('entry')
+                            if entries:
+                                kws = (['mưa', 'lũ', 'ngập', 'bão'] if trang_thai in ["MUA_NHE", "RONG_BAO"]
+                                       else ['nắng', 'hạn hán', 'nhiệt độ'])
+                                found_vid = False
+                                for entry in entries:
+                                    vtitle = entry.title.text if entry.title else ""
+                                    vlink  = entry.find('link')['href'] if entry.find('link') and 'href' in entry.find('link').attrs else ""
+                                    if any(kw in vtitle.lower() for kw in kws):
+                                        video_data = {"title": vtitle, "link": vlink}
+                                        found_vid = True
+                                        break
+                                if not found_vid:
+                                    vtitle = entries[0].title.text if entries[0].title else "Tin tức VTV24"
+                                    vlink  = entries[0].find('link')['href'] if entries[0].find('link') and 'href' in entries[0].find('link').attrs else ""
+                                    if vlink:
+                                        video_data = {"title": vtitle, "link": vlink}
+                    except:
+                        pass
+                        
+
                     # ── 2. Lấy tin tức (giảm còn 5 bài để URL không vượt quá 4000 ký tự của Telegram) ──
-                    tin_tuc = lay_tat_ca_bai_viet_ngau_nhien()[:5]
+                    tin_tuc = lay_tat_ca_bai_viet_ngau_nhien(sort_by_date=True)[:5]
 
                     # ── 3. Đóng gói data ──
                     data_payload = {
@@ -1811,6 +1873,9 @@ def xu_ly_telegram_update(data):
                             "forecast_3h": {"temp": n_temp, "pop": n_pop, "desc": n_desc},
                             "status": trang_thai
                         },
+                        "warningText": warningText,
+                        "suggestionItems": suggestionItems,
+                        "video": video_data,
                         "news": tin_tuc
                     }
 
@@ -1838,7 +1903,7 @@ def xu_ly_telegram_update(data):
                         chat_id,
                         f"✅ <b>Giao Diện Web Thời Tiết – Dữ Liệu Thực Tế</b>\n\n"
                         f"📍 {ten} | 🌡️ {c_temp}°C | {c_icon}\n\n"
-                        f"🌐 <b>Mở website:</b>\n{url_to_send}",
+                        f"🌐 <b>Mở website:</b> <a href='{url_to_send}'>Đường dẫn</a>",
                         parse_mode="HTML"
                     )
                 except Exception as e:
