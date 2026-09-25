@@ -1805,7 +1805,6 @@ def xu_ly_telegram_update(data):
 
                     # Gọi API rút gọn link (TinyURL) để lách luật độ dài của Telegram
                     try:
-                        import requests
                         tiny_res = requests.get(f"http://tinyurl.com/api-create.php?url={raw_url}", timeout=5)
                         if tiny_res.status_code == 200 and tiny_res.text.startswith("http"):
                             url_to_send = tiny_res.text
