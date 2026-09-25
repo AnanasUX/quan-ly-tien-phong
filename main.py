@@ -1806,7 +1806,7 @@ def xu_ly_telegram_update(data):
                         chat_id,
                         f"✅ <b>Giao Diện Web Thời Tiết – Dữ Liệu Thực Tế</b>\n\n"
                         f"📍 {ten} | 🌡️ {c_temp}°C | {c_icon}\n\n"
-                        f"🌐 Mở website:\n👉 <a href='{url}'>Nhấn vào đây để xem giao diện</a>",
+                        f"🌐 <b>Mở website:</b>\n{url}",
                         parse_mode="HTML"
                     )
                 except Exception as e:
