@@ -548,30 +548,24 @@ def day_du_lieu_google_sheets():
         spreadsheet_info = sheets_service.spreadsheets().get(spreadsheetId=SHEETS_ID).execute()
         sheet_name = spreadsheet_info['sheets'][0]['properties']['title']
 
-        # Xóa toàn bộ dữ liệu cũ (giữ lại hàng header 1-2)
+        # Xóa toàn bộ dữ liệu cũ từ hàng 2
         sheet.values().clear(
             spreadsheetId=SHEETS_ID,
-            range=f"'{sheet_name}'!A3:Z"
+            range=f"'{sheet_name}'!A2:E"
         ).execute()
 
-        # Ghi header hàng 1-2 (nếu chưa có)
-        headers = [
-            ["BÁO CÁO TIẾN ĐỘ POWERPOINT", "", "", "", ""],
-            ["STT", "Thư mục cha (Drive)", "File gốc (thu_muc_goc)", "File đã làm", "Trạng thái"]
-        ]
-        sheet.values().update(
-            spreadsheetId=SHEETS_ID,
-            range=f"'{sheet_name}'!A1:E2",
-            valueInputOption="RAW",
-            body={"values": headers}
-        ).execute()
-
-        # Ghi dữ liệu từ hàng 3
+        # Ghi dữ liệu từ hàng 2, viết hoa trạng thái để khớp dropdown
         if rows:
+            for r in rows:
+                if r[4] == "hoàn thành":
+                    r[4] = "Hoàn thành"
+                elif r[4] == "chưa làm":
+                    r[4] = "Chưa làm"
+
             sheet.values().update(
                 spreadsheetId=SHEETS_ID,
-                range=f"'{sheet_name}'!A3:E{2 + len(rows)}",
-                valueInputOption="RAW",
+                range=f"'{sheet_name}'!A2:E{1 + len(rows)}",
+                valueInputOption="USER_ENTERED",
                 body={"values": rows}
             ).execute()
 
