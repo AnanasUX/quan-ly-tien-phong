@@ -1800,13 +1800,23 @@ def xu_ly_telegram_update(data):
                     if not website_base:
                         website_base = "https://ananasux.github.io/Website_thoitiet_design/"
                     
-                    url = f"{website_base.rstrip('/')}/?data={encoded}"
+                    raw_url = f"{website_base.rstrip('/')}/?data={encoded}"
+                    url_to_send = raw_url
+
+                    # Gọi API rút gọn link (TinyURL) để lách luật độ dài của Telegram
+                    try:
+                        import requests
+                        tiny_res = requests.get(f"http://tinyurl.com/api-create.php?url={raw_url}", timeout=5)
+                        if tiny_res.status_code == 200 and tiny_res.text.startswith("http"):
+                            url_to_send = tiny_res.text
+                    except Exception:
+                        pass
 
                     gui_tin_nhan_telegram(
                         chat_id,
                         f"✅ <b>Giao Diện Web Thời Tiết – Dữ Liệu Thực Tế</b>\n\n"
                         f"📍 {ten} | 🌡️ {c_temp}°C | {c_icon}\n\n"
-                        f"🌐 <b>Mở website:</b>\n{url}",
+                        f"🌐 <b>Mở website:</b>\n{url_to_send}",
                         parse_mode="HTML"
                     )
                 except Exception as e:
