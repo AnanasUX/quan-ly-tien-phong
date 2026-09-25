@@ -1044,7 +1044,7 @@ def lay_thoi_tiet_va_tin_tuc_hien_tai(include_news=True):
                 except: soup_yt = BeautifulSoup(res_yt.text, 'html.parser')
                 entries = soup_yt.find_all('entry')
                 if entries:
-                    kws = (['mưa', 'lũ', 'ngập', 'bão'] if trang_thai in ["MUA_NHE", "RONG_BAO"]
+                    kws = (['mưa', 'lũ', 'ngập', 'bão'] if trang_thai in ["MUA_NHO", "MUA_DONG", "MUA_BAO"]
                            else ['nắng', 'hạn hán', 'nhiệt độ'])
                     found_vid = False
                     for entry in entries:
@@ -1853,11 +1853,11 @@ def xu_ly_telegram_update(data):
                     floodItems = []
                     routeItems = []
                     
-                    if trang_thai in ["MUA_NHE", "RONG_BAO"]:
+                    if trang_thai in ["MUA_NHO", "MUA_DONG", "MUA_BAO"]:
                         try:
                             # Use 20 for rain_1h if RONG_BAO to ensure we hit max values if we want mock data, or use cur.rain.1h if we have it
                             # Actually, get_diem_ngap_ha_noi takes rain_1h. We can just use 50 to guarantee mock data for RONG_BAO
-                            txt_ngap, txt_tranh = lay_bang_diem_ngap(muc_do=("TO" if trang_thai=="RONG_BAO" else "NHE"), rain_1h=50)
+                            txt_ngap, txt_tranh = lay_bang_diem_ngap(muc_do=("TO" if trang_thai in ["MUA_DONG", "MUA_BAO"] else "NHE"), rain_1h=50)
                             if txt_ngap:
                                 floodItems = txt_ngap.split("\n")
                             if txt_tranh:
@@ -1868,10 +1868,10 @@ def xu_ly_telegram_update(data):
                     
                     if trang_thai == "BINH_THUONG":
                         suggestionItems = ["Điều khiển phương tiện: Giao thông thuận lợi, chú ý tốc độ theo quy định.", "Trang bị: Không cần trang bị đặc biệt."]
-                    elif trang_thai == "MUA_NHE":
+                    elif trang_thai == "MUA_NHO":
                         warningText = "Mưa nhỏ, đường trơn trượt nhẹ. Có thể che khuất tầm nhìn."
                         suggestionItems = ["Điều khiển phương tiện: Giảm tốc độ, giữ khoảng cách an toàn.", "Trang bị: Mang theo áo mưa mỏng hoặc ô dự phòng."]
-                    elif trang_thai == "RONG_BAO":
+                    elif trang_thai in ["MUA_DONG", "MUA_BAO"]:
                         warningText = "Mưa dông kèm sấm chớp, gió giật mạnh cục bộ. Nguy cơ ngập úng nhanh, cây đổ, mất điện.\nDự báo ngắn: Xác suất mưa dông trong 3h tới vẫn cao, có thể xuất hiện gió mạnh."
                         suggestionItems = ["Điều khiển phương tiện: Tuyệt đối không đi dưới cây lớn, biển quảng cáo. Giảm tốc độ mạnh, bật đèn sương mù nếu có.", "Trang bị: Áo mưa bộ rời, ủng cao su, tránh dùng ô (dễ lật)."]
                     elif trang_thai == "NANG_GAT":
@@ -1896,7 +1896,7 @@ def xu_ly_telegram_update(data):
                                 soup_yt = BeautifulSoup(res_yt.text, 'html.parser')
                             entries = soup_yt.find_all('entry')
                             if entries:
-                                kws = (['mưa', 'lũ', 'ngập', 'bão'] if trang_thai in ["MUA_NHE", "RONG_BAO"]
+                                kws = (['mưa', 'lũ', 'ngập', 'bão'] if trang_thai in ["MUA_NHO", "MUA_DONG", "MUA_BAO"]
                                        else ['nắng', 'hạn hán', 'nhiệt độ'])
                                 found_vid = False
                                 for entry in entries:
