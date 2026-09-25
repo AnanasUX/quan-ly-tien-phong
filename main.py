@@ -1919,8 +1919,10 @@ def xu_ly_telegram_update(data):
                     tin_tuc_raw = lay_bai_viet_moi_chua_gui(str(chat_id), so_luong=10)
                     tin_tuc = dien_anh_cho_danh_sach(tin_tuc_raw)
                     for t in tin_tuc:
-                        if 'description' in t and len(t['description']) > 150:
-                            t['description'] = t['description'][:147] + "..."
+                        # Bỏ hẳn description để giảm dung lượng URL dưới 4000 ký tự (tránh lỗi 400)
+                        if 'description' in t:
+                            t['description'] = ""
+
 
 
                     # ── 3. Đóng gói data ──
@@ -1952,15 +1954,13 @@ def xu_ly_telegram_update(data):
                     }
 
                     # ── 4. Base64 encode → ghép vào URL ──
-                    import zlib
-                    compressed_bytes = zlib.compress(_json.dumps(data_payload, ensure_ascii=False).encode('utf-8'))
-                    encoded = _b64.urlsafe_b64encode(compressed_bytes).decode('ascii')
+                    encoded = _b64.urlsafe_b64encode(_json.dumps(data_payload, ensure_ascii=False).encode('utf-8')).decode('ascii')
                     
                     website_base = WEBSITE_URL.strip()
                     if not website_base:
                         website_base = "https://ananasux.github.io/Website_thoitiet_design/"
                     
-                    raw_url = f"{website_base.rstrip('/')}/?cdata={encoded}"
+                    raw_url = f"{website_base.rstrip('/')}/?data={encoded}"
                     url_to_send = raw_url
 
 
