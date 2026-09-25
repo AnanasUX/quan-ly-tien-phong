@@ -1593,33 +1593,84 @@ def xu_ly_telegram_update(data):
         if cmd == "/websitecn":
             def xu_ly_websitecn():
                 try:
-                    # URL website React (chạy local hoặc deploy)
-                    WEBSITE_URL = os.environ.get("WEBSITE_URL", "https://ananasux.github.io/quan-ly-tien-phong/")
-                    # URL API của bot (endpoint /api/daily-news)
-                    # Khi deploy trên Render/Railway: set BOT_API_URL = https://your-bot.onrender.com
-                    BOT_API_URL = os.environ.get("BOT_API_URL", "")
+                    import base64 as _b64
+                    import json as _json
 
-                    if BOT_API_URL:
-                        api_endpoint = BOT_API_URL.rstrip("/") + "/api/daily-news"
-                        encoded_api  = urllib.parse.quote(api_endpoint, safe="")
-                        url = f"{WEBSITE_URL.rstrip('/')}/?api={encoded_api}"
-                        gui_tin_nhan_telegram(
-                            chat_id,
-                            f"✅ <b>Giao Diện Web Thời Tiết – Dữ Liệu Thực Tế</b>\n\n"
-                            f"🌐 Mở website tại:\n<a href='{url}'>{url}</a>\n\n"
-                            f"📡 Nguồn dữ liệu: <code>{api_endpoint}</code>",
-                            parse_mode="HTML"
-                        )
-                    else:
-                        # Fallback: không có BOT_API_URL, gửi link trực tiếp website
-                        url = WEBSITE_URL
-                        gui_tin_nhan_telegram(
-                            chat_id,
-                            f"🌐 <b>Giao Diện Web Thời Tiết</b>\n\n"
-                            f"<a href='{url}'>{url}</a>\n\n"
-                            f"⚠️ <i>Dữ liệu thực tế: Cấu hình <code>BOT_API_URL</code> trong .env để liên kết API.</i>",
-                            parse_mode="HTML"
-                        )
+                    WEBSITE_URL = os.environ.get("WEBSITE_URL", "https://ananasux.github.io/quan-ly-tien-phong/")
+
+                    # ── 1. Lấy dữ liệu thời tiết thực tế ──
+                    lat = admin_location.get("lat", 20.9716)
+                    lon = admin_location.get("lon", 105.7725)
+                    ten = admin_location.get("name", "Hà Nội, VN")
+
+                    res_curr = requests.get(
+                        f"https://api.openweathermap.org/data/2.5/weather"
+                        f"?lat={lat}&lon={lon}&appid={OPENWEATHER_API_KEY}&units=metric&lang=vi",
+                        timeout=10).json()
+                    c_temp     = round(res_curr['main']['temp'], 1)
+                    feels_like = round(res_curr['main']['feels_like'], 1)
+                    humidity   = res_curr['main']['humidity']
+                    c_desc     = res_curr['weather'][0]['description'].capitalize()
+                    c_icon     = get_owm_icon(res_curr['weather'][0]['icon'])
+                    wind_speed = round(res_curr.get('wind', {}).get('speed', 0), 1)
+
+                    res_fore = requests.get(
+                        f"https://api.openweathermap.org/data/2.5/forecast"
+                        f"?lat={lat}&lon={lon}&appid={OPENWEATHER_API_KEY}&units=metric&lang=vi",
+                        timeout=10).json()
+                    fc     = res_fore.get('list', [{}])[0]
+                    n_temp = round(fc.get('main', {}).get('temp', c_temp), 1)
+                    n_pop  = int(fc.get('pop', 0) * 100)
+                    n_desc = fc.get('weather', [{}])[0].get('description', c_desc).capitalize()
+
+                    res_aqi   = requests.get(
+                        f"https://api.openweathermap.org/data/2.5/air_pollution"
+                        f"?lat={lat}&lon={lon}&appid={OPENWEATHER_API_KEY}",
+                        timeout=5).json()
+                    aqi_level = res_aqi['list'][0]['main']['aqi']
+                    pm25      = round(res_aqi['list'][0]['components'].get('pm2_5', 0), 2)
+
+                    trang_thai = xac_dinh_trang_thai_thoi_tiet(c_temp, feels_like, c_desc, n_pop, humidity)
+
+                    # ── 2. Lấy tin tức ──
+                    tin_tuc = lay_tat_ca_bai_viet_ngau_nhien()[:15]
+
+                    # ── 3. Đóng gói data ──
+                    data_payload = {
+                        "timestamp": datetime.datetime.now(
+                            datetime.timezone(datetime.timedelta(hours=7))
+                        ).strftime('%H:%M %d/%m/%Y'),
+                        "location": ten,
+                        "weather": {
+                            "current": {
+                                "temp":       c_temp,
+                                "feels_like": feels_like,
+                                "humidity":   humidity,
+                                "wind_speed": wind_speed,
+                                "desc":       c_desc,
+                                "icon":       c_icon,
+                                "pm25":       pm25,
+                                "aqi_level":  aqi_level
+                            },
+                            "forecast_3h": {"temp": n_temp, "pop": n_pop, "desc": n_desc},
+                            "status": trang_thai
+                        },
+                        "news": tin_tuc
+                    }
+
+                    # ── 4. Base64 encode → ghép vào URL ──
+                    encoded = _b64.urlsafe_b64encode(
+                        _json.dumps(data_payload, ensure_ascii=False).encode('utf-8')
+                    ).decode('ascii')
+                    url = f"{WEBSITE_URL.rstrip('/')}/?data={encoded}"
+
+                    gui_tin_nhan_telegram(
+                        chat_id,
+                        f"✅ <b>Giao Diện Web Thời Tiết – Dữ Liệu Thực Tế</b>\n\n"
+                        f"📍 {ten} | 🌡️ {c_temp}°C | {c_icon}\n\n"
+                        f"🌐 Mở website:\n<a href='{url}'>{WEBSITE_URL}</a>",
+                        parse_mode="HTML"
+                    )
                 except Exception as e:
                     gui_tin_nhan_telegram(chat_id, f"⚠️ <b>Lỗi:</b> {escape_html(str(e))}", parse_mode="HTML")
             threading.Thread(target=xu_ly_websitecn, daemon=True).start()
