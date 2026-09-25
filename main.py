@@ -1593,68 +1593,35 @@ def xu_ly_telegram_update(data):
         if cmd == "/websitecn":
             def xu_ly_websitecn():
                 try:
-                    import json as _json
-                    try:
-                        import lzstring as _lzstring
-                    except ImportError:
-                        gui_tin_nhan_telegram(chat_id, "⚠️ Thiếu thư viện <code>lzstring</code>. Vui lòng cài: <code>pip install lzstring</code>", parse_mode="HTML")
-                        return
+                    # URL website React (chạy local hoặc deploy)
+                    WEBSITE_URL = os.environ.get("WEBSITE_URL", "https://ananasux.github.io/quan-ly-tien-phong/")
+                    # URL API của bot (endpoint /api/daily-news)
+                    # Khi deploy trên Render/Railway: set BOT_API_URL = https://your-bot.onrender.com
+                    BOT_API_URL = os.environ.get("BOT_API_URL", "")
 
-                    # Lấy tin tức từ nguồn RSS thực tế
-                    news_data = []
-                    try:
-                        all_news = lay_tat_ca_bai_viet_ngau_nhien()
-                        news_data = [{"title": item.get("title", ""), "time": "", "link": item.get("link", "")} for item in all_news[:10]]
-                    except:
-                        pass
-
-                    # Dữ liệu mặc định thời tiết
-                    data = {
-                        "weather": {
-                            "temp": "32.5",
-                            "condition": "Nắng đẹp ☀️",
-                            "feels_like": "35.0",
-                            "humidity": "60",
-                            "pm25": "15.0",
-                            "wind": "10.5",
-                            "location": "Quận Hà Đông, Hà Nội"
-                        },
-                        "news": news_data
-                    }
-
-                    # Lấy thời tiết thực tế từ API
-                    try:
-                        lat, lon = str(admin_location.get("lat", "20.9716")), str(admin_location.get("lon", "105.7725"))
-                        res = requests.get(
-                            f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={OPENWEATHER_API_KEY}&units=metric&lang=vi",
-                            timeout=8).json()
-                        wind_speed = round(res.get('wind', {}).get('speed', 0) * 3.6, 1)
-                        res_aqi = requests.get(
-                            f"https://api.openweathermap.org/data/2.5/air_pollution?lat={lat}&lon={lon}&appid={OPENWEATHER_API_KEY}",
-                            timeout=5).json()
-                        pm25_val = res_aqi['list'][0]['components'].get('pm2_5', 15.0)
-                        data["weather"]["temp"]       = str(round(res.get('main', {}).get('temp', 32.5), 1))
-                        data["weather"]["condition"]  = str(res.get('weather', [{}])[0].get('description', '').capitalize()) + " ☀️"
-                        data["weather"]["feels_like"] = str(round(res.get('main', {}).get('feels_like', 35.0), 1))
-                        data["weather"]["humidity"]   = str(res.get('main', {}).get('humidity', 60))
-                        data["weather"]["wind"]       = str(wind_speed)
-                        data["weather"]["pm25"]       = str(pm25_val)
-                        data["weather"]["location"]   = admin_location.get("name", "Quận Hà Đông, Hà Nội").split(",")[0]
-                    except:
-                        pass
-
-                    lz = _lzstring.LZString()
-                    compressed = lz.compressToEncodedURIComponent(_json.dumps(data, ensure_ascii=False))
-                    url = f"https://ananasux.github.io/quan-ly-tien-phong/?data={compressed}"
-
-                    gui_tin_nhan_telegram(
-                        chat_id,
-                        f"✅ <b>Dữ Liệu Đã Sẵn Sàng!</b>\n\n"
-                        f"🌐 Link truy cập giao diện Web thời gian thực:\n<a href='{url}'>{url}</a>",
-                        parse_mode="HTML"
-                    )
+                    if BOT_API_URL:
+                        api_endpoint = BOT_API_URL.rstrip("/") + "/api/daily-news"
+                        encoded_api  = urllib.parse.quote(api_endpoint, safe="")
+                        url = f"{WEBSITE_URL.rstrip('/')}/?api={encoded_api}"
+                        gui_tin_nhan_telegram(
+                            chat_id,
+                            f"✅ <b>Giao Diện Web Thời Tiết – Dữ Liệu Thực Tế</b>\n\n"
+                            f"🌐 Mở website tại:\n<a href='{url}'>{url}</a>\n\n"
+                            f"📡 Nguồn dữ liệu: <code>{api_endpoint}</code>",
+                            parse_mode="HTML"
+                        )
+                    else:
+                        # Fallback: không có BOT_API_URL, gửi link trực tiếp website
+                        url = WEBSITE_URL
+                        gui_tin_nhan_telegram(
+                            chat_id,
+                            f"🌐 <b>Giao Diện Web Thời Tiết</b>\n\n"
+                            f"<a href='{url}'>{url}</a>\n\n"
+                            f"⚠️ <i>Dữ liệu thực tế: Cấu hình <code>BOT_API_URL</code> trong .env để liên kết API.</i>",
+                            parse_mode="HTML"
+                        )
                 except Exception as e:
-                    gui_tin_nhan_telegram(chat_id, f"⚠️ <b>Lỗi hệ thống nghiêm trọng:</b> {escape_html(str(e))}", parse_mode="HTML")
+                    gui_tin_nhan_telegram(chat_id, f"⚠️ <b>Lỗi:</b> {escape_html(str(e))}", parse_mode="HTML")
             threading.Thread(target=xu_ly_websitecn, daemon=True).start()
             return
 
