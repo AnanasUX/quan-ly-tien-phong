@@ -1765,8 +1765,8 @@ def xu_ly_telegram_update(data):
 
                     trang_thai = xac_dinh_trang_thai_thoi_tiet(c_temp, feels_like, c_desc, n_pop, humidity)
 
-                    # ── 2. Lấy tin tức ──
-                    tin_tuc = lay_tat_ca_bai_viet_ngau_nhien()[:15]
+                    # ── 2. Lấy tin tức (giảm còn 5 bài để URL không vượt quá 4000 ký tự của Telegram) ──
+                    tin_tuc = lay_tat_ca_bai_viet_ngau_nhien()[:5]
 
                     # ── 3. Đóng gói data ──
                     data_payload = {
