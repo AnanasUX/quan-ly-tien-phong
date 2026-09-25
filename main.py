@@ -1479,7 +1479,11 @@ def xu_ly_telegram_update(data):
                             gui_tin_nhan_telegram(chat_id, caption, parse_mode="HTML")
                 except Exception:
                     traceback.print_exc()
-            threading.Thread(target=thread_xu_ly_tin_tuc, daemon=True).start()
+            wait_ids = gui_tin_nhan_telegram(chat_id, "⏳ <i>Hệ thống đang xử lý, vui lòng chờ...</i>", parse_mode="HTML", disable_noti=True)
+            def wrapper_tintuc():
+                thread_xu_ly_tin_tuc()
+                for wid in wait_ids: xoa_tin_nhan(chat_id, wid)
+            threading.Thread(target=wrapper_tintuc, daemon=True).start()
             return
 
         # ── Thời tiết hiện tại (Admin) – GIỐNG HỆT CODE GỐC, KHÔNG có loading message ──
@@ -1518,7 +1522,11 @@ def xu_ly_telegram_update(data):
                     pass
                 if img_url:
                     gui_anh_telegram(chat_id, img_url, img_caption)
-            threading.Thread(target=xu_ly_tt_hientai_rieng, daemon=True).start()
+            wait_ids = gui_tin_nhan_telegram(chat_id, "⏳ <i>Hệ thống đang xử lý, vui lòng chờ...</i>", parse_mode="HTML", disable_noti=True)
+            def wrapper_tt_rieng():
+                xu_ly_tt_hientai_rieng()
+                for wid in wait_ids: xoa_tin_nhan(chat_id, wid)
+            threading.Thread(target=wrapper_tt_rieng, daemon=True).start()
             return
 
         # ── Thời tiết theo địa điểm ──
@@ -1530,7 +1538,11 @@ def xu_ly_telegram_update(data):
                     gui_tin_nhan_telegram(chat_id, noi_dung, parse_mode="HTML")
                     if img_url:
                         gui_anh_telegram(chat_id, img_url, img_caption)
-                threading.Thread(target=xu_ly_tt_nhanh, daemon=True).start()
+                wait_ids = gui_tin_nhan_telegram(chat_id, "⏳ <i>Hệ thống đang xử lý, vui lòng chờ...</i>", parse_mode="HTML", disable_noti=True)
+                def wrapper_tt_nhanh():
+                    xu_ly_tt_nhanh()
+                    for wid in wait_ids: xoa_tin_nhan(chat_id, wid)
+                threading.Thread(target=wrapper_tt_nhanh, daemon=True).start()
             else:
                 def xu_ly_tt_theo_vung():
                     kq = tim_toa_do_theo_ten(dia_diem)
@@ -1566,7 +1578,11 @@ def xu_ly_telegram_update(data):
                             f"⚠️ Lỗi tra cứu thời tiết: {escape_html(str(e))}",
                             parse_mode="HTML"
                         )
-                threading.Thread(target=xu_ly_tt_theo_vung, daemon=True).start()
+                wait_ids = gui_tin_nhan_telegram(chat_id, "⏳ <i>Hệ thống đang xử lý, vui lòng chờ...</i>", parse_mode="HTML", disable_noti=True)
+                def wrapper_tt_vung():
+                    xu_ly_tt_theo_vung()
+                    for wid in wait_ids: xoa_tin_nhan(chat_id, wid)
+                threading.Thread(target=wrapper_tt_vung, daemon=True).start()
             return
 
         # ── Báo cáo PowerPoint ──
@@ -1583,7 +1599,7 @@ def xu_ly_telegram_update(data):
                     xoa_tin_nhan(chat_id, old_id)
             wait_msg_ids = gui_tin_nhan_telegram(
                 chat_id,
-                "⏳ <i>Đang quét hệ thống Google Drive...\n(Báo cáo tự xóa sau 2 phút)</i>",
+                "⏳ <i>Hệ thống đang xử lý, vui lòng chờ...</i>",
                 parse_mode="HTML", disable_noti=True
             )
             def tien_trinh_baocao_va_huy():
@@ -1610,7 +1626,10 @@ def xu_ly_telegram_update(data):
                 except Exception as e:
                     print("Lỗi khi chạy báo cáo:", e)
                     pass
-            threading.Thread(target=tien_trinh_baocao_va_huy, daemon=True).start()
+            def wrapper_baocao():
+                tien_trinh_baocao_va_huy()
+                for wid in wait_msg_ids: xoa_tin_nhan(chat_id, wid)
+            threading.Thread(target=wrapper_baocao, daemon=True).start()
             return
 
         # ── Đổi vùng thời tiết ──
@@ -1680,6 +1699,8 @@ def xu_ly_telegram_update(data):
 
         # ── Tính điện nước từng bước ──
         if cmd in ["/tinh", "Tính số điện nước AnX", "menu_tinhtien"]:
+            wait_ids = gui_tin_nhan_telegram(chat_id, "⏳ <i>Hệ thống đang xử lý, vui lòng chờ...</i>", parse_mode="HTML", disable_noti=True)
+            for wid in wait_ids: xoa_tin_nhan(chat_id, wid)
             if not kiem_tra_quyen_admin(chat_id, user_id, username):
                 return
             if chat_id not in user_sessions:
@@ -1697,6 +1718,8 @@ def xu_ly_telegram_update(data):
 
         # ── Tính nhanh /tinhcn ──
         if cmd == "/tinhcn":
+            wait_ids = gui_tin_nhan_telegram(chat_id, "⏳ <i>Hệ thống đang xử lý, vui lòng chờ...</i>", parse_mode="HTML", disable_noti=True)
+            for wid in wait_ids: xoa_tin_nhan(chat_id, wid)
             if not kiem_tra_quyen_admin(chat_id, user_id, username):
                 return
             if chat_id not in user_sessions:
@@ -1820,7 +1843,11 @@ def xu_ly_telegram_update(data):
                     )
                 except Exception as e:
                     gui_tin_nhan_telegram(chat_id, f"⚠️ <b>Lỗi:</b> {escape_html(str(e))}", parse_mode="HTML")
-            threading.Thread(target=xu_ly_websitecn, daemon=True).start()
+            wait_ids = gui_tin_nhan_telegram(chat_id, "⏳ <i>Hệ thống đang xử lý, vui lòng chờ...</i>", parse_mode="HTML", disable_noti=True)
+            def wrapper():
+                xu_ly_websitecn()
+                for wid in wait_ids: xoa_tin_nhan(chat_id, wid)
+            threading.Thread(target=wrapper, daemon=True).start()
             return
 
         # ── Shopee ──
@@ -1879,6 +1906,8 @@ def xu_ly_telegram_update(data):
                 return
 
             elif step == "nhap_dien_cu":
+                wait_ids = gui_tin_nhan_telegram(chat_id, "⏳ <i>Hệ thống đang xử lý, vui lòng chờ...</i>", parse_mode="HTML", disable_noti=True)
+                for wid in wait_ids: xoa_tin_nhan(chat_id, wid)
                 try:
                     val = int(text)
                     user_sessions[chat_id]["data"]["dien_cu"] = val
@@ -1893,6 +1922,8 @@ def xu_ly_telegram_update(data):
                 return
 
             elif step == "nhap_dien_moi":
+                wait_ids = gui_tin_nhan_telegram(chat_id, "⏳ <i>Hệ thống đang xử lý, vui lòng chờ...</i>", parse_mode="HTML", disable_noti=True)
+                for wid in wait_ids: xoa_tin_nhan(chat_id, wid)
                 try:
                     val = int(text)
                     if val < user_sessions[chat_id]["data"]["dien_cu"]:
@@ -1910,6 +1941,8 @@ def xu_ly_telegram_update(data):
                 return
 
             elif step == "nhap_nuoc_cu":
+                wait_ids = gui_tin_nhan_telegram(chat_id, "⏳ <i>Hệ thống đang xử lý, vui lòng chờ...</i>", parse_mode="HTML", disable_noti=True)
+                for wid in wait_ids: xoa_tin_nhan(chat_id, wid)
                 try:
                     val = int(text)
                     user_sessions[chat_id]["data"]["nuoc_cu"] = val
@@ -1924,6 +1957,8 @@ def xu_ly_telegram_update(data):
                 return
 
             elif step == "nhap_nuoc_moi":
+                wait_ids = gui_tin_nhan_telegram(chat_id, "⏳ <i>Hệ thống đang xử lý, vui lòng chờ...</i>", parse_mode="HTML", disable_noti=True)
+                for wid in wait_ids: xoa_tin_nhan(chat_id, wid)
                 try:
                     val = int(text)
                     if val < user_sessions[chat_id]["data"]["nuoc_cu"]:
@@ -1942,6 +1977,8 @@ def xu_ly_telegram_update(data):
 
             # ── Nhập nhanh /tinhcn – nhận 1 dòng "sdcu;sdm;sncm;snm;sk" ──
             elif step == "nhap_nhanh_tinh_cn":
+                wait_ids = gui_tin_nhan_telegram(chat_id, "⏳ <i>Hệ thống đang xử lý, vui lòng chờ...</i>", parse_mode="HTML", disable_noti=True)
+                for wid in wait_ids: xoa_tin_nhan(chat_id, wid)
                 try:
                     parts = text.split(";")
                     if len(parts) != 5:
