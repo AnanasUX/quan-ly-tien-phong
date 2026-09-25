@@ -1134,9 +1134,12 @@ def lay_tat_ca_bai_viet_ngau_nhien(sort_by_date=False):
                     continue
                 try:    soup = BeautifulSoup(res.text, 'xml')
                 except: soup = BeautifulSoup(res.text, 'html.parser')
-                for item in soup.find_all('item')[:5]:
+                for item in soup.find_all('item')[:15]:
                     raw_title = item.title.text.strip() if item.title else "News"
                     title     = html.unescape(raw_title)
+                    # Xử lý cắt bỏ phần "- Tên Báo" do Google News tự động nối thêm vào cuối title
+                    if " - " in title:
+                        title = " - ".join(title.split(" - ")[:-1])
                     raw_desc  = item.description.text.strip() if item.description else ""
                     desc      = html.unescape(raw_desc)
                     link      = item.link.text.strip() if item.link else ""
