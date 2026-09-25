@@ -544,10 +544,14 @@ def day_du_lieu_google_sheets():
         # ── 2. Ghi vào Google Sheets ─────────────────────────────────────────
         sheet = sheets_service.spreadsheets()
 
+        # Lấy tên của Sheet đầu tiên để ghi dữ liệu
+        spreadsheet_info = sheets_service.spreadsheets().get(spreadsheetId=SHEETS_ID).execute()
+        sheet_name = spreadsheet_info['sheets'][0]['properties']['title']
+
         # Xóa toàn bộ dữ liệu cũ (giữ lại hàng header 1-2)
         sheet.values().clear(
             spreadsheetId=SHEETS_ID,
-            range="Sheet1!A3:Z"
+            range=f"'{sheet_name}'!A3:Z"
         ).execute()
 
         # Ghi header hàng 1-2 (nếu chưa có)
@@ -557,7 +561,7 @@ def day_du_lieu_google_sheets():
         ]
         sheet.values().update(
             spreadsheetId=SHEETS_ID,
-            range="Sheet1!A1:E2",
+            range=f"'{sheet_name}'!A1:E2",
             valueInputOption="RAW",
             body={"values": headers}
         ).execute()
@@ -566,7 +570,7 @@ def day_du_lieu_google_sheets():
         if rows:
             sheet.values().update(
                 spreadsheetId=SHEETS_ID,
-                range=f"Sheet1!A3:E{2 + len(rows)}",
+                range=f"'{sheet_name}'!A3:E{2 + len(rows)}",
                 valueInputOption="RAW",
                 body={"values": rows}
             ).execute()
