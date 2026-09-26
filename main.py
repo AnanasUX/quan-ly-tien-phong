@@ -1919,12 +1919,12 @@ def xu_ly_telegram_update(data):
                         
 
                     # ── 2. Lấy tin tức (giảm còn 5 bài để URL không vượt quá 4000 ký tự của Telegram) ──
-                    tin_tuc_raw = lay_bai_viet_moi_chua_gui(str(chat_id), so_luong=40)
+                    tin_tuc_raw = lay_bai_viet_moi_chua_gui(str(chat_id), so_luong=12)
                     tin_tuc = dien_anh_cho_danh_sach(tin_tuc_raw)
                     for t in tin_tuc:
                         # Bỏ hẳn description để giảm dung lượng URL dưới 4000 ký tự (tránh lỗi 400)
                         if 'description' in t:
-                            pass
+                            t['description'] = ""
 
 
 
