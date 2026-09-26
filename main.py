@@ -2083,7 +2083,7 @@ def xu_ly_telegram_update(data):
                         )
                         
                         all_to_del = user_sessions[chat_id].get("session_msg_ids", []) + msg_ids
-                        xoa_tin_nhan_sau_delay(chat_id, all_to_del, 60)
+                        xoa_tin_nhan_sau_delay(chat_id, all_to_del, 30)
                         user_sessions[chat_id]["session_msg_ids"] = []
 
 
@@ -2216,7 +2216,7 @@ def xu_ly_telegram_update(data):
                     except:
                         pass
                     msg_ids = gui_tin_nhan_telegram(chat_id, msg_, parse_mode="HTML")
-                    xoa_tin_nhan_sau_delay(chat_id, msg_ids, 60)
+                    xoa_tin_nhan_sau_delay(chat_id, msg_ids, 30)
                 except Exception:
                     gui_tin_nhan_telegram(chat_id, "⚠️ Lỗi: Vui lòng nhập đúng 5 số nguyên (cách nhau bởi dấu ;). Ví dụ: <code>1682;1820;811;819;8</code>", parse_mode="HTML")
                 return
@@ -2250,7 +2250,7 @@ def xu_ly_telegram_update(data):
                         "<i>(Tin nhắn tự xóa sau 1 phút)</i>"
                     )
                     msg_ids = gui_tin_nhan_telegram(chat_id, msg_, parse_mode="HTML")
-                    xoa_tin_nhan_sau_delay(chat_id, msg_ids, 60)
+                    xoa_tin_nhan_sau_delay(chat_id, msg_ids, 30)
                     save_data()
                 except:
                     gui_tin_nhan_telegram(
