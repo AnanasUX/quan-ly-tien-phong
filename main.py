@@ -1924,7 +1924,7 @@ def xu_ly_telegram_update(data):
                     for t in tin_tuc:
                         # Bỏ hẳn description để giảm dung lượng URL dưới 4000 ký tự (tránh lỗi 400)
                         if 'description' in t:
-                            t['description'] = ""
+                            pass
 
 
 
