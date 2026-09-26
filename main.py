@@ -1957,13 +1957,16 @@ def xu_ly_telegram_update(data):
                     }
 
                     # ── 4. Base64 encode → ghép vào URL ──
-                    encoded = _b64.urlsafe_b64encode(_json.dumps(data_payload, ensure_ascii=False).encode('utf-8')).decode('ascii')
+                    import zlib
+                    json_str = _json.dumps(data_payload, ensure_ascii=False).encode('utf-8')
+                    compressed = zlib.compress(json_str)
+                    encoded = _b64.urlsafe_b64encode(compressed).decode('ascii')
                     
                     website_base = WEBSITE_URL.strip()
                     if not website_base:
                         website_base = "https://ananasux.github.io/Website_thoitiet_design/"
                     
-                    raw_url = f"{website_base.rstrip('/')}/?data={encoded}"
+                    raw_url = f"{website_base.rstrip('/')}/?cdata={encoded}"
                     url_to_send = raw_url
 
 
