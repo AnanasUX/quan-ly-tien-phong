@@ -332,6 +332,12 @@ def gui_tin_nhan_telegram(chat_id, noi_dung, reply_markup=None, parse_mode="HTML
                 msg_ids.append(res['result']['message_id'])
         except:
             pass
+    
+    if chat_id in user_sessions:
+        step = user_sessions[chat_id].get("step")
+        if step or user_sessions[chat_id].get("pending_sonuocngay"):
+            user_sessions[chat_id].setdefault("session_msg_ids", []).extend(msg_ids)
+            
     return msg_ids
 
 def gui_anh_telegram(chat_id, photo_url, caption):
@@ -450,15 +456,32 @@ def them_lich_chot_nuoc(ngay_chot, so_khoi, so_ngay):
     try:
         creds = Credentials.from_service_account_file('credentials.json', scopes=GOOGLE_SCOPES)
         service = build('calendar', 'v3', credentials=creds)
+        
+        # 1. Search and delete existing events with the same title
+        try:
+            now = datetime.datetime.utcnow().isoformat() + 'Z'
+            events_result = service.events().list(
+                calendarId=CALENDAR_ID, timeMin=now,
+                singleEvents=True, orderBy='startTime', q='Lịch chốt số nước'
+            ).execute()
+            events = events_result.get('items', [])
+            for evt in events:
+                if 'Lịch chốt số nước' in evt.get('summary', ''):
+                    try:
+                        service.events().delete(calendarId=CALENDAR_ID, eventId=evt['id']).execute()
+                    except: pass
+        except: pass
+        
+        # 2. Insert new event at 19:00 (7:00 PM)
         event = {
             'summary': '💧 Lịch chốt số nước',
             'description': f'Hệ thống AnX nhắc nhở chốt nước.\n- Tiêu thụ thực tế: {so_khoi} khối/ngày\n- Số ngày dùng: {so_ngay} ngày.',
             'start': {
-                'date': ngay_chot.strftime('%Y-%m-%d'),
+                'dateTime': f"{ngay_chot.strftime('%Y-%m-%d')}T19:00:00+07:00",
                 'timeZone': 'Asia/Ho_Chi_Minh',
             },
             'end': {
-                'date': (ngay_chot + datetime.timedelta(days=1)).strftime('%Y-%m-%d'),
+                'dateTime': f"{ngay_chot.strftime('%Y-%m-%d')}T19:30:00+07:00",
                 'timeZone': 'Asia/Ho_Chi_Minh',
             },
         }
@@ -470,6 +493,7 @@ def them_lich_chot_nuoc(ngay_chot, so_khoi, so_ngay):
             return False, "Lỗi xác thực JWT (invalid_grant). Vui lòng cập nhật credentials.json."
         if "notFound" in error_msg or "404" in error_msg:
             return False, f"Không tìm thấy lịch (Calendar ID: {CALENDAR_ID}). Cần Share lịch này cho Service Account."
+
         return False, f"Lỗi Calendar API: {error_msg}"
 
 # =====================================================================
@@ -1400,6 +1424,20 @@ def api_daily_news():
 # =====================================================================
 # [PHẦN 9] XỬ LÝ UPDATE TELEGRAM (dùng chung Polling + Webhook)
 # =====================================================================
+
+def xoa_phien_lam_viec_sau_delay(chat_id, delay=120):
+    def task():
+        time.sleep(delay)
+        if chat_id in user_sessions and user_sessions[chat_id].get("step"):
+            if time.time() - user_sessions[chat_id].get("last_active", 0) >= delay - 5:
+                all_to_del = user_sessions[chat_id].get("session_msg_ids", [])
+                for mid in all_to_del:
+                    xoa_tin_nhan(chat_id, mid)
+                user_sessions[chat_id] = {"step": None, "data": {}}
+                gui_tin_nhan_telegram(chat_id, "⏳ Đã quá 2 phút không nhận được phản hồi. Quá trình tính toán bị hủy, vui lòng làm lại.", parse_mode="HTML")
+    import threading
+    threading.Thread(target=task, daemon=True).start()
+
 def xu_ly_telegram_update(data):
     try:
         if not data:
@@ -1416,6 +1454,8 @@ def xu_ly_telegram_update(data):
             text       = msg.get("text", "").strip()
             if chat_id and message_id:
                 add_user_msg_to_queue(chat_id, message_id)
+                if chat_id in user_sessions:
+                    user_sessions[chat_id]['last_active'] = time.time()
 
         elif "callback_query" in data:
             cb       = data["callback_query"]
@@ -2026,6 +2066,7 @@ def xu_ly_telegram_update(data):
                     if sn <= 0:
                         return
                     user_sessions[chat_id]["step"] = None
+                    user_sessions[chat_id]["pending_sonuocngay"] = False
                     s_khoa = tracking_data.get(str(chat_id), 0)
                     if s_khoa > 0:
                         so_ngay = math.ceil(s_khoa / sn)
@@ -2040,7 +2081,13 @@ def xu_ly_telegram_update(data):
                             f"<i>(Tin nhắn tự xóa sau 1 phút)</i>",
                             parse_mode="HTML"
                         )
-                        xoa_tin_nhan_sau_delay(chat_id, msg_ids, 60)
+                        
+                        all_to_del = user_sessions[chat_id].get("session_msg_ids", []) + msg_ids
+                        xoa_tin_nhan_sau_delay(chat_id, all_to_del, 60)
+                        user_sessions[chat_id]["session_msg_ids"] = []
+
+
+
                 except:
                     pass
                 return
@@ -2139,6 +2186,7 @@ def xu_ly_telegram_update(data):
                         return
 
                     user_sessions[chat_id]["step"] = None
+                    user_sessions[chat_id]["pending_sonuocngay"] = True
 
                     so_dien   = dien_moi - dien_cu
                     so_nuoc   = nuoc_moi - nuoc_cu
@@ -2177,6 +2225,7 @@ def xu_ly_telegram_update(data):
                 try:
                     s_khoa = int(text)
                     user_sessions[chat_id]["step"] = None
+                    user_sessions[chat_id]["pending_sonuocngay"] = True
                     d         = user_sessions[chat_id]["data"]
                     so_dien   = d["dien_moi"] - d["dien_cu"]
                     so_nuoc   = d["nuoc_moi"] - d["nuoc_cu"]
