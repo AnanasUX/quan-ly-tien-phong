@@ -335,6 +335,9 @@ def gui_tin_nhan_telegram(chat_id, noi_dung, reply_markup=None, parse_mode="HTML
         except:
             pass
     
+    if isinstance(noi_dung, str) and ("⚠️" in noi_dung or "cảnh báo" in noi_dung.lower()):
+        xoa_tin_nhan_sau_delay(chat_id, msg_ids, 30)
+    
     if chat_id in user_sessions:
         step = user_sessions[chat_id].get("step")
         if step or user_sessions[chat_id].get("pending_sonuocngay"):
