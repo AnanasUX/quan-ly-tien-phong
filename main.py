@@ -163,6 +163,7 @@ def load_data():
                     tracking_data          = data.get("tracking_data", {})
                     active_tracking_chats  = set(data.get("active_tracking_chats", []))
                     pinned_weather_msgs    = data.get("pinned_weather_msgs", {})
+                    user_last_news_sent    = data.get("user_last_news_sent", {})
                     last_weather_alerts    = data.get("last_weather_alerts", {})
                     raw_sent_set           = data.get("sent_articles_set", {})
                     sent_articles_set      = {k: set(v) for k, v in raw_sent_set.items()}
@@ -183,6 +184,7 @@ def save_data():
                     "tracking_data":          tracking_data,
                     "active_tracking_chats":  list(active_tracking_chats),
                     "pinned_weather_msgs":     pinned_weather_msgs,
+                    "user_last_news_sent":       user_last_news_sent,
                     "last_weather_alerts":     last_weather_alerts,
                     "sent_articles_set":       serializable_sent_set,
                     "admin_location":          admin_location,
@@ -1265,7 +1267,7 @@ def job_tu_dong_day_tin():
         ht_time     = time.time()
         with json_lock: chats_to_send = list(active_auto_news_chats)
         valid_chats = [c for c in chats_to_send
-                       if ht_time - user_last_news_sent.get(str(c), 0) >= 3600]
+                       if ht_time - user_last_news_sent.get(str(c), 0) >= 3500]
         if not valid_chats:
             return
 
