@@ -1873,18 +1873,18 @@ def xu_ly_telegram_update(data):
                         suggestionItems = ["Điều khiển phương tiện: Giao thông thuận lợi, chú ý tốc độ theo quy định.", "Trang bị: Không cần trang bị đặc biệt."]
                     elif trang_thai == "MUA_NHO":
                         warningText = "Mưa nhỏ, đường trơn trượt nhẹ. Có thể che khuất tầm nhìn."
-                        suggestionItems = ["Điều khiển phương tiện: Giảm tốc độ, giữ khoảng cách an toàn.", "Trang bị: Mang theo áo mưa mỏng hoặc ô dự phòng."]
+                        suggestionItems = ["Điều khiển phương tiện: Giảm tốc độ, giữ khoảng cách an toàn, tránh phanh gấp.", "Trang bị: Nên mặc áo mưa, bọc kỹ thiết bị điện tử."]
                     elif trang_thai in ["MUA_DONG", "MUA_BAO"]:
                         warningText = "Mưa dông kèm sấm chớp, gió giật mạnh cục bộ. Nguy cơ ngập úng nhanh, cây đổ, mất điện.\nDự báo ngắn: Xác suất mưa dông trong 3h tới vẫn cao, có thể xuất hiện gió mạnh."
                         suggestionItems = ["Điều khiển phương tiện: Tuyệt đối không đi dưới cây lớn, biển quảng cáo. Giảm tốc độ mạnh, bật đèn sương mù nếu có.", "Trang bị: Áo mưa bộ rời, ủng cao su, tránh dùng ô (dễ lật)."]
                     elif trang_thai == "NANG_GAT":
                         warningText = "Nắng nóng gay gắt, nguy cơ say nắng, sốc nhiệt cao. Tia UV ở mức nguy hiểm."
-                        suggestionItems = ["Điều khiển phương tiện: Tránh di chuyển khung giờ 11h-15h. Đeo kính râm che chắn tốt.", "Trang bị: Áo chống nắng dày, bôi kem chống nắng, mang theo nước uống."]
+                        suggestionItems = ["Điều khiển phương tiện: Hạn chế di chuyển giờ cao điểm nắng (11h-15h). Đỗ xe ở nơi có bóng râm, kiểm tra áp suất lốp.", "Trang bị: Bắt buộc đội mũ rộng vành, đeo kính râm UV400, mang theo nước uống, bôi kem chống nắng SPF50+."]
                     elif trang_thai == "AM_U":
-                        suggestionItems = ["Điều khiển phương tiện: Bật đèn chiếu gần (đèn sương mù) để tăng độ nhận diện. Chú ý quan sát.", "Trang bị: Mang theo áo mưa dự phòng vì có thể mưa bất chợt."]
+                        suggestionItems = ["Điều khiển phương tiện: Tầm nhìn hơi giảm, nên bật đèn chiếu gần khi đi vào khu vực tối.", "Trang bị: Mang theo áo mưa mỏng phòng trường hợp mưa bất ngờ."]
                     elif trang_thai == "NANG":
                         warningText = "Trời nắng đẹp, tầm nhìn tốt. Chỉ số UV ở mức trung bình đến cao."
-                        suggestionItems = ["Điều khiển phương tiện: Tầm nhìn xa tốt, lái xe bình thường.", "Trang bị: Mang theo kính mát, áo khoác mỏng nếu di chuyển lâu."]
+                        suggestionItems = ["Điều khiển phương tiện: Giao thông thuận lợi, chú ý chống chói khi lái xe.", "Trang bị: Nên đội mũ, đeo kính râm, bôi kem chống nắng nếu ra ngoài lâu."]
 
                     video_data = None
                     try:
