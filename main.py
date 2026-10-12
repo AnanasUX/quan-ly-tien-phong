@@ -510,9 +510,22 @@ def trich_xuat_so_tuan(ten_thu_muc):
 
 SHEETS_ID = os.environ.get("SHEETS_ID", "1Rvz9rfQY6cH4sfIHQ8yIM6eykdiNJEXGseH03qPaf8I")
 
+def xac_dinh_sheet_cho_thu_muc(folder_name):
+    """Phân loại thư mục vào sheet tương ứng ('TOAN' hoặc 'TIENGVIET') dựa trên tên thư mục cha.
+    Ví dụ: 'KNTT_TIENGVIET4_MNT_TUAN1' -> 'TIENGVIET'
+           'TUAN1_KNTT_TOAN4_MNT'      -> 'TOAN'
+    """
+    fn_clean = folder_name.upper().replace("_", "").replace(" ", "").replace("-", "")
+    if "TIENGVIET" in fn_clean or "TIENG_VIET" in folder_name.upper() or "TIẾNGVIỆT" in fn_clean:
+        return "TIENGVIET"
+    elif "TOAN" in fn_clean or "TOÁN" in folder_name.upper():
+        return "TOAN"
+    return None
+
 def day_du_lieu_google_sheets():
-    """Quét Drive rồi ghi vào Google Sheets theo cấu trúc A(STT) B(Thư mục cha) C(File gốc) D(File đã làm) E(Trạng thái).
-    Mỗi lần gọi sẽ xóa dữ liệu cũ rồi ghi mới từ hàng 3.
+    """Quét Drive rồi phân loại ghi vào đúng Google Sheets ('TOAN' và 'TIENGVIET')
+    theo cấu trúc A(STT) B(Thư mục cha) C(File gốc) D(File đã làm) E(Trạng thái).
+    Sắp xếp tuần từ bé đến lớn tăng dần và STT tăng dần cho từng sheets.
     """
     if not GOOGLE_API_AVAILABLE or not os.path.exists('credentials.json'):
         return False, "Không tìm thấy credentials.json"
@@ -522,21 +535,32 @@ def day_du_lieu_google_sheets():
         drive_service = build('drive', 'v3', credentials=creds)
         sheets_service = build('sheets', 'v4', credentials=creds)
 
-        # ── 1. Quét Drive (logic giống tao_bao_cao_powerpoint) ──────────────
+        # ── 1. Quét Drive (sắp xếp tuần từ bé đến lớn) ─────────────────────
         query_main = (f"'{POWERPOINT_FOLDER_ID}' in parents and trashed=false "
                       f"and mimeType='application/vnd.google-apps.folder'")
         results     = drive_service.files().list(q=query_main, fields="files(id, name)", pageSize=1000).execute()
         raw_folders = results.get('files', [])
         main_folders = sorted(raw_folders, key=lambda x: (trich_xuat_so_tuan(x['name']), x['name']))
 
-        rows = []   # Mỗi phần tử: (folder_name, orig_file, processed_file_or_none)
-        stt  = 1
+        # Phân loại dữ liệu theo từng Sheet (TOAN và TIENGVIET)
+        sheet_rows = {
+            "TOAN": [],
+            "TIENGVIET": []
+        }
+        stt_counters = {
+            "TOAN": 1,
+            "TIENGVIET": 1
+        }
 
         for main_folder in main_folders:
             folder_name = main_folder['name']
             folder_id   = main_folder['id']
 
             if not ("TUAN" in folder_name.upper() or "KNTT" in folder_name.upper()):
+                continue
+
+            target_sheet = xac_dinh_sheet_cho_thu_muc(folder_name)
+            if not target_sheet:
                 continue
 
             match_tuan = re.search(r'(?i)tuan\s*(\d+)', folder_name)
@@ -577,56 +601,63 @@ def day_du_lieu_google_sheets():
                             found = proc
                             break
                     # C = file gốc (thu_muc_goc), D = file đã xử lý
+                    stt = stt_counters[target_sheet]
                     if found:
-                        rows.append([stt, folder_name, orig, found, "hoàn thành"])
+                        sheet_rows[target_sheet].append([stt, folder_name, orig, found, "Hoàn thành"])
                         matched_processed.add(found)
                     else:
                         # D = tên dự kiến (chưa tồn tại)
                         expected = (tien_to + orig) if (tien_to and not orig.lower().startswith(tien_to.lower())) else orig
-                        rows.append([stt, folder_name, orig, expected, "chưa làm"])
-                    stt += 1
+                        sheet_rows[target_sheet].append([stt, folder_name, orig, expected, "Chưa làm"])
+                    stt_counters[target_sheet] += 1
 
                 # File processed không khớp gốc nào (thừa)
                 for proc in processed_files:
                     if proc not in matched_processed:
                         expected_orig = re.sub(r'(?i)^tuan\d+_', '', proc) if tien_to else proc
-                        rows.append([stt, folder_name, expected_orig, proc, "hoàn thành"])
-                        stt += 1
+                        stt = stt_counters[target_sheet]
+                        sheet_rows[target_sheet].append([stt, folder_name, expected_orig, proc, "Hoàn thành"])
+                        stt_counters[target_sheet] += 1
             else:
                 # Không có thu_muc_goc → liệt kê processed_files trực tiếp
                 for proc in sorted(processed_files):
-                    rows.append([stt, folder_name, "", proc, "hoàn thành"])
-                    stt += 1
+                    stt = stt_counters[target_sheet]
+                    sheet_rows[target_sheet].append([stt, folder_name, "", proc, "Hoàn thành"])
+                    stt_counters[target_sheet] += 1
 
-        # ── 2. Ghi vào Google Sheets ─────────────────────────────────────────
+        # ── 2. Ghi vào Google Sheets cho từng tab (TOAN và TIENGVIET) ────────
         sheet = sheets_service.spreadsheets()
 
-        # Lấy tên của Sheet đầu tiên để ghi dữ liệu
-        spreadsheet_info = sheets_service.spreadsheets().get(spreadsheetId=SHEETS_ID).execute()
-        sheet_name = spreadsheet_info['sheets'][0]['properties']['title']
+        spreadsheet_info = sheet.get(spreadsheetId=SHEETS_ID).execute()
+        existing_sheets = [s['properties']['title'] for s in spreadsheet_info.get('sheets', [])]
 
-        # Xóa toàn bộ dữ liệu cũ từ hàng 2
-        sheet.values().clear(
-            spreadsheetId=SHEETS_ID,
-            range=f"'{sheet_name}'!A2:E"
-        ).execute()
+        summary_parts = []
+        for s_name in ["TOAN", "TIENGVIET"]:
+            rows_for_sheet = sheet_rows.get(s_name, [])
 
-        # Ghi dữ liệu từ hàng 2, viết hoa trạng thái để khớp dropdown
-        if rows:
-            for r in rows:
-                if r[4] == "hoàn thành":
-                    r[4] = "Hoàn thành"
-                elif r[4] == "chưa làm":
-                    r[4] = "Chưa làm"
+            if s_name not in existing_sheets:
+                add_req = {"requests": [{"addSheet": {"properties": {"title": s_name}}}]}
+                sheet.batchUpdate(spreadsheetId=SHEETS_ID, body=add_req).execute()
+                existing_sheets.append(s_name)
 
-            sheet.values().update(
+            # Xóa toàn bộ dữ liệu cũ từ hàng 2
+            sheet.values().clear(
                 spreadsheetId=SHEETS_ID,
-                range=f"'{sheet_name}'!A2:E{1 + len(rows)}",
-                valueInputOption="USER_ENTERED",
-                body={"values": rows}
+                range=f"'{s_name}'!A2:E"
             ).execute()
 
-        return True, f"Đã ghi {len(rows)} dòng vào Google Sheets."
+            # Ghi dữ liệu mới từ hàng 2
+            if rows_for_sheet:
+                sheet.values().update(
+                    spreadsheetId=SHEETS_ID,
+                    range=f"'{s_name}'!A2:E{1 + len(rows_for_sheet)}",
+                    valueInputOption="USER_ENTERED",
+                    body={"values": rows_for_sheet}
+                ).execute()
+
+            summary_parts.append(f"{len(rows_for_sheet)} dòng vào '{s_name}'")
+
+        return True, f"Đã ghi " + ", ".join(summary_parts) + "."
 
     except Exception as e:
         return False, str(e)
@@ -1188,6 +1219,9 @@ def lay_tat_ca_bai_viet_ngau_nhien(sort_by_date=False):
                                 img_url = img_tag['src']
                         except:
                             pass
+                    import urllib.parse
+                    if img_url and img_url.startswith("http") and "wsrv.nl" not in img_url:
+                        img_url = f"https://wsrv.nl/?url={urllib.parse.quote(img_url)}"
                     try:    c_desc = BeautifulSoup(desc, 'html.parser').get_text().strip()
                     except: c_desc = desc
                     c_desc = html.unescape(c_desc)
@@ -1694,22 +1728,28 @@ def xu_ly_telegram_update(data):
             )
             def tien_trinh_baocao_va_huy():
                 try:
+                    # 1. Trả đủ nội dung báo cáo tiến độ PowerPoint lên Telegram trước
                     bao_cao_html = tao_bao_cao_powerpoint()
-                    
-                    # Gọi hàm đồng bộ Google Sheets
-                    sheets_success, sheets_msg = day_du_lieu_google_sheets()
-                    if sheets_success:
-                        bao_cao_html += f"\n\n✅ <b>Đồng bộ Google Sheets:</b> Thành công ({escape_html(sheets_msg)})"
-                    else:
-                        bao_cao_html += f"\n\n⚠️ <b>Đồng bộ Google Sheets:</b> Thất bại ({escape_html(sheets_msg)})"
-                        
                     for w_id in wait_msg_ids:
                         xoa_tin_nhan(chat_id, w_id)
                     new_ids = gui_tin_nhan_telegram(chat_id, bao_cao_html, parse_mode="HTML", disable_noti=True)
-                    last_report_msgs[chat_id] = new_ids
+                    last_report_msgs[chat_id] = list(new_ids)
                     save_data()
+
+                    # 2. Sau khi Telegram trả đủ nội dung -> Tiến hành đồng bộ Google Sheets phân loại 2 tab (TOAN, TIENGVIET)
+                    sheets_success, sheets_msg = day_du_lieu_google_sheets()
+                    sync_text = (
+                        f"📊 <b>Đồng bộ Google Sheets:</b> ✅ Thành công ({escape_html(sheets_msg)})"
+                        if sheets_success else
+                        f"📊 <b>Đồng bộ Google Sheets:</b> ⚠️ Thất bại ({escape_html(sheets_msg)})"
+                    )
+                    sync_ids = gui_tin_nhan_telegram(chat_id, sync_text, parse_mode="HTML", disable_noti=True)
+                    if sync_ids:
+                        last_report_msgs[chat_id].extend(sync_ids)
+                        save_data()
+
                     time.sleep(120)
-                    for m_id in new_ids:
+                    for m_id in last_report_msgs.get(chat_id, []):
                         xoa_tin_nhan(chat_id, m_id)
                     last_report_msgs[chat_id] = []
                     save_data()
