@@ -1010,12 +1010,14 @@ video_cache_lock = threading.Lock()
 
 def lay_danh_sach_video_da_dang(so_luong=10, trang_thai="BINH_THUONG"):
     """
-    Thu thập video đa dạng, phong phú từ 4 kênh chính thống (VTV24, VTC Now, Tuổi Trẻ, Lao Động).
-    Có bộ đệm (cache) 10 phút để tối ưu tốc độ phản hồi.
-    Phân loại thông minh: Thời tiết & Bão lũ, Cảnh báo khẩn, Giao thông & Đô thị, Tiêu điểm 24h.
+    Thu thập CHỈ VIDEO DÀI (Bỏ qua hoàn toàn YouTube Shorts, Reels, video ngắn).
+    Kiểm tra độ tươi mới: chỉ nhận video mới nhất từ các cơ quan báo chí chính thống đang hoạt động.
+    Bỏ qua các kênh/bài không có dữ liệu hoặc lỗi.
+    Sắp xếp theo thời gian mới nhất lên đầu tiên.
     """
     global video_cache_data
     now_ts = time.time()
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
 
     with video_cache_lock:
         if video_cache_data["videos"] and (now_ts - video_cache_data["timestamp"] < 600):
@@ -1024,11 +1026,11 @@ def lay_danh_sach_video_da_dang(so_luong=10, trang_thai="BINH_THUONG"):
                 cached.sort(key=lambda x: 0 if x.get("category") in ["weather", "warning"] else 1)
             return cached[:so_luong]
 
+    # Các kênh chính thống liên tục cập nhật video dài mới nhất hàng ngày
     channels = [
         {"ten": "VTV24", "cid": "UCabsTV34JwALXKGMqHpvUiA", "badge": "VTV24"},
-        {"ten": "VTC Now", "cid": "UCL9-pEHNBs3N4r2bMoXdLJA", "badge": "VTC NOW"},
+        {"ten": "Báo Tiền Phong", "cid": "UCPhPBJ3qE719TgLYVcNY8yg", "badge": "TIỀN PHONG"},
         {"ten": "Báo Tuổi Trẻ", "cid": "UC47WI-kZXFf0H_f7pvaNCEQ", "badge": "TUỔI TRẺ"},
-        {"ten": "Báo Lao Động", "cid": "UCFN0IoARjOAgx-OWr-JBIHg", "badge": "LAO ĐỘNG"}
     ]
 
     all_vids = []
@@ -1038,60 +1040,109 @@ def lay_danh_sach_video_da_dang(so_luong=10, trang_thai="BINH_THUONG"):
         try:
             url = f"https://www.youtube.com/feeds/videos.xml?channel_id={ch['cid']}"
             r = requests.get(url, timeout=3.5, headers={"User-Agent": "Mozilla/5.0"})
-            if r.status_code == 200:
+            if r.status_code != 200:
+                continue
+
+            try:
+                soup = BeautifulSoup(r.text, 'xml')
+            except:
+                soup = BeautifulSoup(r.text, 'html.parser')
+
+            entries = soup.find_all('entry')
+            if not entries:
+                continue
+
+            for entry in entries:
+                vid_el = entry.find('yt:videoId')
+                vid_id = vid_el.text.strip() if vid_el else ""
+                if not vid_id or vid_id in seen_ids:
+                    continue
+
+                link_el = entry.find('link')
+                link_href = link_el['href'] if link_el and 'href' in link_el.attrs else ""
+                raw_title = entry.title.text.strip() if entry.title else ""
+                title = html.unescape(raw_title)
+                t_lower = title.lower()
+
+                # ── 1. LOẠI BỎ HOÀN TOÀN YOUTUBE SHORTS (CHỈ DÙNG VIDEO DÀI) ──
+                # Kiểm tra đường dẫn URL dạng /shorts/
+                if '/shorts/' in link_href.lower():
+                    continue
+
+                # Kiểm tra từ khóa, hashtag nhận diện Shorts hoặc video ngắn dưới 60s
+                shorts_keywords = ['#short', '#shorts', '30s nóng', 'tiktok', '#reels', 'reels', '#shortvideo', 'shorts:']
+                if any(sk in t_lower for sk in shorts_keywords):
+                    continue
+
+                # ── 2. ĐẢM BẢO VIDEO LUÔN LÀ MỚI NHẤT (BỎ QUA VIDEO CŨ / KHÔNG CÓ DỮ LIỆU) ──
+                pub_el = entry.find('published')
+                pub_raw = pub_el.text.strip() if pub_el else ""
+                if not pub_raw:
+                    continue
+
                 try:
-                    soup = BeautifulSoup(r.text, 'xml')
-                except:
-                    soup = BeautifulSoup(r.text, 'html.parser')
-                entries = soup.find_all('entry')
-                for entry in entries[:6]:
-                    vid_el = entry.find('yt:videoId')
-                    vid_id = vid_el.text.strip() if vid_el else ""
-                    if not vid_id or vid_id in seen_ids:
+                    pub_dt = datetime.datetime.fromisoformat(pub_raw.replace('Z', '+00:00'))
+                    diff_hours = (now_utc - pub_dt).total_seconds() / 3600.0
+
+                    # Chỉ chấp nhận video trong vòng 14 ngày trở lại đây (loại bỏ video cũ hàng năm)
+                    if diff_hours > (14 * 24):
                         continue
-                    seen_ids.add(vid_id)
-                    raw_title = entry.title.text.strip() if entry.title else ""
-                    title = html.unescape(raw_title)
-                    t_lower = title.lower()
 
-                    if any(k in t_lower for k in ['mưa', 'bão', 'lũ', 'ngập', 'triều cường', 'thời tiết', 'nhiệt độ', 'rét', 'áp thấp', 'dông']):
-                        cat = "weather"
-                        cat_label = "Thời tiết & Bão lũ"
-                        badge = "THỜI TIẾT"
-                    elif any(k in t_lower for k in ['cảnh báo', 'nguy cơ', 'hỏa hoạn', 'cháy', 'sạt lở', 'tai nạn', 'khẩn']):
-                        cat = "warning"
-                        cat_label = "Cảnh báo khẩn"
-                        badge = "CẢNH BÁO"
-                    elif any(k in t_lower for k in ['giao thông', 'xe', 'đường', 'ùn tắc', 'cầu', 'hạ tầng', 'cao tốc']):
-                        cat = "traffic"
-                        cat_label = "Giao thông & Đô thị"
-                        badge = "GIAO THÔNG"
-                    elif any(k in t_lower for k in ['thời sự', 'toàn cảnh', 'tiêu điểm', 'quốc tế', 'tin nóng', 'hôm nay']):
-                        cat = "news"
-                        cat_label = "Tiêu điểm 24h"
-                        badge = "TIÊU ĐIỂM"
+                    if diff_hours < 2:
+                        pub_str = "Vừa phát sóng"
+                    elif diff_hours < 24:
+                        pub_str = f"{int(diff_hours)} giờ trước"
+                    elif diff_hours < 48:
+                        pub_str = "Hôm qua"
                     else:
-                        cat = "life"
-                        cat_label = "Đời sống & Xã hội"
-                        badge = ch["badge"]
+                        pub_str = f"{int(diff_hours // 24)} ngày trước"
+                except Exception:
+                    # Nếu lỗi parse thời gian, kiểm tra có phải năm hiện tại không
+                    if not pub_raw.startswith(str(now_utc.year)):
+                        continue
+                    pub_str = pub_raw[:10]
 
-                    pub_el = entry.find('published')
-                    pub_str = pub_el.text[:10] if pub_el else "Hôm nay"
+                # Phân loại chủ đề thông minh
+                if any(k in t_lower for k in ['mưa', 'bão', 'lũ', 'ngập', 'triều cường', 'thời tiết', 'nhiệt độ', 'rét', 'áp thấp', 'dông']):
+                    cat = "weather"
+                    cat_label = "Thời tiết & Bão lũ"
+                    badge = "THỜI TIẾT"
+                elif any(k in t_lower for k in ['cảnh báo', 'nguy cơ', 'hỏa hoạn', 'cháy', 'sạt lở', 'tai nạn', 'khẩn']):
+                    cat = "warning"
+                    cat_label = "Cảnh báo khẩn"
+                    badge = "CẢNH BÁO"
+                elif any(k in t_lower for k in ['giao thông', 'xe', 'đường', 'ùn tắc', 'cầu', 'hạ tầng', 'cao tốc']):
+                    cat = "traffic"
+                    cat_label = "Giao thông & Đô thị"
+                    badge = "GIAO THÔNG"
+                elif any(k in t_lower for k in ['thời sự', 'toàn cảnh', 'tiêu điểm', 'quốc tế', 'tin nóng', 'nghị trường']):
+                    cat = "news"
+                    cat_label = "Tiêu điểm 24h"
+                    badge = "TIÊU ĐIỂM"
+                else:
+                    cat = "life"
+                    cat_label = "Đời sống & Xã hội"
+                    badge = ch["badge"]
 
-                    all_vids.append({
-                        "id": vid_id,
-                        "title": title,
-                        "link": f"https://www.youtube.com/watch?v={vid_id}",
-                        "embed_url": f"https://www.youtube-nocookie.com/embed/{vid_id}",
-                        "thumbnail": f"https://img.youtube.com/vi/{vid_id}/hqdefault.jpg",
-                        "channel": ch["ten"],
-                        "category": cat,
-                        "category_label": cat_label,
-                        "badge": badge,
-                        "published": pub_str
-                    })
+                seen_ids.add(vid_id)
+                all_vids.append({
+                    "id": vid_id,
+                    "title": title,
+                    "link": f"https://www.youtube.com/watch?v={vid_id}",
+                    "embed_url": f"https://www.youtube-nocookie.com/embed/{vid_id}",
+                    "thumbnail": f"https://img.youtube.com/vi/{vid_id}/hqdefault.jpg",
+                    "channel": ch["ten"],
+                    "category": cat,
+                    "category_label": cat_label,
+                    "badge": badge,
+                    "published": pub_str,
+                    "published_iso": pub_raw
+                })
         except Exception:
             pass
+
+    # ── 3. SẮP XẾP TOÀN BỘ VIDEO THEO THỜI GIAN MỚI NHẤT GIẢM DẦN ──
+    all_vids.sort(key=lambda x: x.get("published_iso", ""), reverse=True)
 
     if all_vids:
         with video_cache_lock:
