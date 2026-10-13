@@ -1002,6 +1002,107 @@ def format_weather(trang_thai, ht, ten_vi_tri, c_temp, feels_like, humidity, pm2
 
     return msg, img_url, img_caption, tu_khoa
 
+# =====================================================================
+# [PHẦN 5.5] BỘ THU THẬP & TỔNG HỢP VIDEO TIN TỨC - THỜI TIẾT ĐA NGUỒN
+# =====================================================================
+video_cache_data = {"timestamp": 0, "videos": []}
+video_cache_lock = threading.Lock()
+
+def lay_danh_sach_video_da_dang(so_luong=10, trang_thai="BINH_THUONG"):
+    """
+    Thu thập video đa dạng, phong phú từ 4 kênh chính thống (VTV24, VTC Now, Tuổi Trẻ, Lao Động).
+    Có bộ đệm (cache) 10 phút để tối ưu tốc độ phản hồi.
+    Phân loại thông minh: Thời tiết & Bão lũ, Cảnh báo khẩn, Giao thông & Đô thị, Tiêu điểm 24h.
+    """
+    global video_cache_data
+    now_ts = time.time()
+
+    with video_cache_lock:
+        if video_cache_data["videos"] and (now_ts - video_cache_data["timestamp"] < 600):
+            cached = list(video_cache_data["videos"])
+            if trang_thai in ["MUA_NHO", "MUA_DONG", "MUA_BAO", "NANG_GAT"]:
+                cached.sort(key=lambda x: 0 if x.get("category") in ["weather", "warning"] else 1)
+            return cached[:so_luong]
+
+    channels = [
+        {"ten": "VTV24", "cid": "UCabsTV34JwALXKGMqHpvUiA", "badge": "VTV24"},
+        {"ten": "VTC Now", "cid": "UCL9-pEHNBs3N4r2bMoXdLJA", "badge": "VTC NOW"},
+        {"ten": "Báo Tuổi Trẻ", "cid": "UC47WI-kZXFf0H_f7pvaNCEQ", "badge": "TUỔI TRẺ"},
+        {"ten": "Báo Lao Động", "cid": "UCFN0IoARjOAgx-OWr-JBIHg", "badge": "LAO ĐỘNG"}
+    ]
+
+    all_vids = []
+    seen_ids = set()
+
+    for ch in channels:
+        try:
+            url = f"https://www.youtube.com/feeds/videos.xml?channel_id={ch['cid']}"
+            r = requests.get(url, timeout=3.5, headers={"User-Agent": "Mozilla/5.0"})
+            if r.status_code == 200:
+                try:
+                    soup = BeautifulSoup(r.text, 'xml')
+                except:
+                    soup = BeautifulSoup(r.text, 'html.parser')
+                entries = soup.find_all('entry')
+                for entry in entries[:6]:
+                    vid_el = entry.find('yt:videoId')
+                    vid_id = vid_el.text.strip() if vid_el else ""
+                    if not vid_id or vid_id in seen_ids:
+                        continue
+                    seen_ids.add(vid_id)
+                    raw_title = entry.title.text.strip() if entry.title else ""
+                    title = html.unescape(raw_title)
+                    t_lower = title.lower()
+
+                    if any(k in t_lower for k in ['mưa', 'bão', 'lũ', 'ngập', 'triều cường', 'thời tiết', 'nhiệt độ', 'rét', 'áp thấp', 'dông']):
+                        cat = "weather"
+                        cat_label = "Thời tiết & Bão lũ"
+                        badge = "THỜI TIẾT"
+                    elif any(k in t_lower for k in ['cảnh báo', 'nguy cơ', 'hỏa hoạn', 'cháy', 'sạt lở', 'tai nạn', 'khẩn']):
+                        cat = "warning"
+                        cat_label = "Cảnh báo khẩn"
+                        badge = "CẢNH BÁO"
+                    elif any(k in t_lower for k in ['giao thông', 'xe', 'đường', 'ùn tắc', 'cầu', 'hạ tầng', 'cao tốc']):
+                        cat = "traffic"
+                        cat_label = "Giao thông & Đô thị"
+                        badge = "GIAO THÔNG"
+                    elif any(k in t_lower for k in ['thời sự', 'toàn cảnh', 'tiêu điểm', 'quốc tế', 'tin nóng', 'hôm nay']):
+                        cat = "news"
+                        cat_label = "Tiêu điểm 24h"
+                        badge = "TIÊU ĐIỂM"
+                    else:
+                        cat = "life"
+                        cat_label = "Đời sống & Xã hội"
+                        badge = ch["badge"]
+
+                    pub_el = entry.find('published')
+                    pub_str = pub_el.text[:10] if pub_el else "Hôm nay"
+
+                    all_vids.append({
+                        "id": vid_id,
+                        "title": title,
+                        "link": f"https://www.youtube.com/watch?v={vid_id}",
+                        "embed_url": f"https://www.youtube-nocookie.com/embed/{vid_id}",
+                        "thumbnail": f"https://img.youtube.com/vi/{vid_id}/hqdefault.jpg",
+                        "channel": ch["ten"],
+                        "category": cat,
+                        "category_label": cat_label,
+                        "badge": badge,
+                        "published": pub_str
+                    })
+        except Exception:
+            pass
+
+    if all_vids:
+        with video_cache_lock:
+            video_cache_data["videos"] = all_vids
+            video_cache_data["timestamp"] = now_ts
+
+    result = all_vids if all_vids else video_cache_data.get("videos", [])
+    if trang_thai in ["MUA_NHO", "MUA_DONG", "MUA_BAO", "NANG_GAT"]:
+        result = sorted(result, key=lambda x: 0 if x.get("category") in ["weather", "warning"] else 1)
+    return result[:so_luong]
+
 
 def lay_thoi_tiet_va_tin_tuc_hien_tai(include_news=True):
     try:
@@ -1096,31 +1197,14 @@ def lay_thoi_tiet_va_tin_tuc_hien_tai(include_news=True):
             msg += " └ <i>Tạm thời không thể tải tin tức nóng.</i>\n"
 
         try:
-            url_yt  = "https://www.youtube.com/feeds/videos.xml?channel_id=UCabsTV34JwALXKGMqHpvUiA"
-            res_yt  = requests.get(url_yt, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
-            res_yt.encoding = 'utf-8'
-            if res_yt.status_code == 200:
-                try:    soup_yt = BeautifulSoup(res_yt.text, 'xml')
-                except: soup_yt = BeautifulSoup(res_yt.text, 'html.parser')
-                entries = soup_yt.find_all('entry')
-                if entries:
-                    kws = (['mưa', 'lũ', 'ngập', 'bão'] if trang_thai in ["MUA_NHO", "MUA_DONG", "MUA_BAO"]
-                           else ['nắng', 'hạn hán', 'nhiệt độ'])
-                    found_vid = False
-                    for entry in entries:
-                        vtitle = html.unescape(entry.title.text if entry.title else "")
-                        vlink  = (entry.find('link')['href']
-                                  if entry.find('link') and 'href' in entry.find('link').attrs else "")
-                        if any(kw in vtitle.lower() for kw in kws):
-                            msg += f"\n📺 <b>VIDEO CẢNH BÁO (VTV24):</b>\n └ <a href='{vlink}'>{escape_html(vtitle)}</a>\n"
-                            found_vid = True
-                            break
-                    if not found_vid:
-                        vtitle = html.unescape(entries[0].title.text if entries[0].title else "Tin tức VTV24")
-                        vlink  = (entries[0].find('link')['href']
-                                  if entries[0].find('link') and 'href' in entries[0].find('link').attrs else "")
-                        if vlink:
-                            msg += f"\n📺 <b>TIN TỨC VIDEO (VTV24):</b>\n └ <a href='{vlink}'>{escape_html(vtitle)}</a>\n"
+            vids = lay_danh_sach_video_da_dang(so_luong=3, trang_thai=trang_thai)
+            if vids:
+                top_v = vids[0]
+                badge_tag = "🚨 <b>VIDEO CẢNH BÁO</b>" if top_v.get("category") in ["weather", "warning"] else "📺 <b>BẢN TIN VIDEO TIÊU ĐIỂM</b>"
+                msg += f"\n{badge_tag} ({top_v['channel']}):\n └ <a href='{top_v['link']}'>{escape_html(top_v['title'])}</a>\n"
+                if len(vids) > 1:
+                    sub_v = vids[1]
+                    msg += f" └ <a href='{sub_v['link']}'>{escape_html(sub_v['title'])}</a>\n"
         except:
             pass
 
@@ -1443,16 +1527,20 @@ def api_daily_news():
         pm25      = res_aqi['list'][0]['components'].get('pm2_5', 0)
         trang_thai = xac_dinh_trang_thai_thoi_tiet(c_temp, feels_like, c_desc, n_pop, humidity)
         tin_tuc   = lay_tat_ca_bai_viet_ngau_nhien()[:15]
+        videos_list = lay_danh_sach_video_da_dang(so_luong=12, trang_thai=trang_thai)
+        wind_speed = round(res_curr.get('wind', {}).get('speed', 0) * 3.6)
         data_response = {
             "timestamp": datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=7))).strftime('%H:%M %d/%m/%Y'),
             "location": ten_vi_tri,
             "weather": {
-                "current":     {"temp": c_temp, "feels_like": feels_like, "humidity": humidity,
+                "current":     {"temp": c_temp, "feels_like": feels_like, "humidity": humidity, "wind_speed": wind_speed,
                                 "desc": c_desc, "icon": c_icon, "pm25": pm25, "aqi_level": aqi_level},
                 "forecast_3h": {"temp": n_temp, "pop": n_pop, "desc": n_desc},
                 "status":      trang_thai
             },
-            "news": tin_tuc
+            "news": tin_tuc,
+            "videos": videos_list,
+            "video": videos_list[0] if videos_list else None
         }
         response = jsonify(data_response)
         response.headers.add("Access-Control-Allow-Origin", "*")
@@ -1971,37 +2059,8 @@ def xu_ly_telegram_update(data):
                         warningText = "Trời nắng đẹp, tầm nhìn tốt. Chỉ số UV ở mức trung bình đến cao."
                         suggestionItems = ["Điều khiển phương tiện: Giao thông thuận lợi, chú ý chống chói khi lái xe.", "Trang bị: Nên đội mũ, đeo kính râm, bôi kem chống nắng nếu ra ngoài lâu."]
 
-                    video_data = None
-                    try:
-                        url_yt = "https://www.youtube.com/feeds/videos.xml?channel_id=UCabsTV34JwALXKGMqHpvUiA"
-                        res_yt = requests.get(url_yt, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
-                        res_yt.encoding = 'utf-8'
-                        if res_yt.status_code == 200:
-                            try:
-                                from bs4 import BeautifulSoup
-                                soup_yt = BeautifulSoup(res_yt.text, 'xml')
-                            except:
-                                soup_yt = BeautifulSoup(res_yt.text, 'html.parser')
-                            entries = soup_yt.find_all('entry')
-                            if entries:
-                                kws = (['mưa', 'lũ', 'ngập', 'bão'] if trang_thai in ["MUA_NHO", "MUA_DONG", "MUA_BAO"]
-                                       else ['nắng', 'hạn hán', 'nhiệt độ'])
-                                found_vid = False
-                                for entry in entries:
-                                    vtitle = entry.title.text if entry.title else ""
-                                    vlink  = entry.find('link')['href'] if entry.find('link') and 'href' in entry.find('link').attrs else ""
-                                    if any(kw in vtitle.lower() for kw in kws):
-                                        video_data = {"title": vtitle, "link": vlink}
-                                        found_vid = True
-                                        break
-                                if not found_vid:
-                                    vtitle = entries[0].title.text if entries[0].title else "Tin tức VTV24"
-                                    vlink  = entries[0].find('link')['href'] if entries[0].find('link') and 'href' in entries[0].find('link').attrs else ""
-                                    if vlink:
-                                        video_data = {"title": vtitle, "link": vlink}
-                    except:
-                        pass
-                        
+                    videos_list = lay_danh_sach_video_da_dang(so_luong=6, trang_thai=trang_thai)
+                    video_data = videos_list[0] if videos_list else None
 
                     # ── 2. Lấy tin tức (giảm còn 5 bài để URL không vượt quá 4000 ký tự của Telegram) ──
                     tin_tuc_raw = lay_bai_viet_moi_chua_gui(str(chat_id), so_luong=12)
@@ -2010,8 +2069,6 @@ def xu_ly_telegram_update(data):
                         # Bỏ hẳn description để giảm dung lượng URL dưới 4000 ký tự (tránh lỗi 400)
                         if 'description' in t:
                             t['description'] = ""
-
-
 
                     # ── 3. Đóng gói data ──
                     data_payload = {
@@ -2038,6 +2095,7 @@ def xu_ly_telegram_update(data):
                         "floodItems": floodItems,
                         "routeItems": routeItems,
                         "video": video_data,
+                        "videos": videos_list,
                         "news": tin_tuc
                     }
 
