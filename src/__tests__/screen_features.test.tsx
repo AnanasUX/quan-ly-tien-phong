@@ -29,6 +29,7 @@ import {
   type AppData,
   type VideoItem,
 } from '../App';
+import { VisualTestRunner } from '../VisualTestRunner';
 
 beforeAll(() => {
   // Mock scrollIntoView cho môi trường jsdom
@@ -458,6 +459,87 @@ describe('Màn hình 4 & 5: Tin tức và Giao diện Responsive (SCR-NEWS-04 & 
     expect(btnClear).toBeDefined();
     fireEvent.click(btnClear);
     expect(onSearchChangeMock).toHaveBeenCalledWith("");
+  });
+
+  it('F-TST-01: VisualTestRunner hiển thị đầy đủ bảng điều khiển HUD (Tiến độ, Nút Pause/Resume, Bỏ qua, Đóng) và các bước mô phỏng', () => {
+    const onCloseMock = vi.fn();
+    const onOpenCopilotMock = vi.fn();
+    const onCloseCopilotMock = vi.fn();
+    const onPlayVideoMock = vi.fn();
+    const onCloseVideoMock = vi.fn();
+    const onSelectArticleMock = vi.fn();
+    const onCloseArticleMock = vi.fn();
+    const onSearchMock = vi.fn();
+
+    // 1. Khi isOpen = false: Không render
+    const { rerender } = render(
+      <VisualTestRunner
+        data={mockData}
+        isOpen={false}
+        onClose={onCloseMock}
+        onOpenCopilot={onOpenCopilotMock}
+        onCloseCopilot={onCloseCopilotMock}
+        onPlayVideo={onPlayVideoMock}
+        onCloseVideo={onCloseVideoMock}
+        onSelectArticle={onSelectArticleMock}
+        onCloseArticle={onCloseArticleMock}
+        onSearch={onSearchMock}
+      />
+    );
+    expect(screen.queryByText(/BẢNG ĐIỀU KHIỂN KIỂM THỬ TRỰC QUAN/i)).toBeNull();
+
+    // 2. Khi isOpen = true: Render HUD và các nút điều khiển
+    rerender(
+      <VisualTestRunner
+        data={mockData}
+        isOpen={true}
+        onClose={onCloseMock}
+        onOpenCopilot={onOpenCopilotMock}
+        onCloseCopilot={onCloseCopilotMock}
+        onPlayVideo={onPlayVideoMock}
+        onCloseVideo={onCloseVideoMock}
+        onSelectArticle={onSelectArticleMock}
+        onCloseArticle={onCloseArticleMock}
+        onSearch={onSearchMock}
+      />
+    );
+
+    // Tiêu đề HUD
+    expect(screen.getByText(/VISUAL TEST RUNNER/i)).toBeDefined();
+    // Nút Tạm dừng / Tiếp tục
+    const btnPause = screen.getByText(/Tạm dừng/i);
+    expect(btnPause).toBeDefined();
+    fireEvent.click(btnPause);
+    expect(screen.getByText(/Tiếp tục/i)).toBeDefined();
+
+    // Nút Bỏ qua bước
+    const btnSkip = screen.getByText(/Bỏ qua/i);
+    expect(btnSkip).toBeDefined();
+    fireEvent.click(btnSkip);
+
+    // Nút Dừng
+    const btnStop = screen.getByText(/Dừng Test/i);
+    expect(btnStop).toBeDefined();
+    fireEvent.click(btnStop);
+    expect(onCloseMock).toHaveBeenCalled();
+  });
+
+  it('F-TST-02: DesktopLayout hiển thị nút Kích hoạt Kiểm thử trực quan trên Header', () => {
+    const onStartTestMock = vi.fn();
+    render(
+      <DesktopLayout
+        data={mockData}
+        onPlayVideo={vi.fn()}
+        onOpenCopilot={vi.fn()}
+        onStartVisualTest={onStartTestMock}
+      />
+    );
+
+    const btnTest = screen.getByTestId('start-visual-test-btn');
+    expect(btnTest).toBeDefined();
+    expect(btnTest.textContent).toContain('Test Trực Quan');
+    fireEvent.click(btnTest);
+    expect(onStartTestMock).toHaveBeenCalled();
   });
 });
 

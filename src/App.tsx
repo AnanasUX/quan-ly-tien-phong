@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { VisualTestRunner } from "./VisualTestRunner";
 
 const assetPathPrefix = "/assets";
 const imgMoreHorizontal = `${assetPathPrefix}/eff74.svg`;
@@ -578,7 +579,8 @@ export function VideoModal({ video, onClose }: { video: VideoItem | null; onClos
             </a>
             <button
               onClick={onClose}
-              className="size-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center text-[18px] transition-colors"
+              data-testid="close-video-modal"
+              className="size-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center text-[18px] transition-colors cursor-pointer"
               aria-label="Đóng video"
             >
               ✕
@@ -682,6 +684,7 @@ export function ArticleDetailModal({
             </button>
             <button
               onClick={onClose}
+              data-testid="close-article-modal"
               aria-label="Đóng chi tiết bài viết"
               className="size-8 rounded-full bg-[#f4f6fa] hover:bg-[#e3e7ef] text-[#182033] flex items-center justify-center text-[16px] font-bold transition-colors cursor-pointer"
             >
@@ -1039,6 +1042,7 @@ export function AntigravityCopilotModal({ isOpen, onClose, data, initialAction }
           </div>
           <button
             onClick={onClose}
+            data-testid="close-copilot-modal"
             className="size-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center text-[18px] transition-colors cursor-pointer"
             aria-label="Đóng Copilot"
           >
@@ -1066,6 +1070,7 @@ export function AntigravityCopilotModal({ isOpen, onClose, data, initialAction }
         <div className="p-3 bg-[#0f172a] border-b border-indigo-500/10 grid grid-cols-2 sm:grid-cols-4 gap-2">
           <button
             onClick={() => executeAction("weather_impact")}
+            data-testid="copilot-modal-btn-weather"
             disabled={loading}
             className="flex flex-col items-start p-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-violet-500/50 transition-all text-left cursor-pointer group disabled:opacity-50"
           >
@@ -1074,6 +1079,7 @@ export function AntigravityCopilotModal({ isOpen, onClose, data, initialAction }
           </button>
           <button
             onClick={() => executeAction("news_digest")}
+            data-testid="copilot-modal-btn-news"
             disabled={loading}
             className="flex flex-col items-start p-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-violet-500/50 transition-all text-left cursor-pointer group disabled:opacity-50"
           >
@@ -1082,6 +1088,7 @@ export function AntigravityCopilotModal({ isOpen, onClose, data, initialAction }
           </button>
           <button
             onClick={() => executeAction("health_pm25")}
+            data-testid="copilot-modal-btn-pm25"
             disabled={loading}
             className="flex flex-col items-start p-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-violet-500/50 transition-all text-left cursor-pointer group disabled:opacity-50"
           >
@@ -1090,6 +1097,7 @@ export function AntigravityCopilotModal({ isOpen, onClose, data, initialAction }
           </button>
           <button
             onClick={() => executeAction("smart_route")}
+            data-testid="copilot-modal-btn-route"
             disabled={loading}
             className="flex flex-col items-start p-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-violet-500/50 transition-all text-left cursor-pointer group disabled:opacity-50"
           >
@@ -1233,6 +1241,7 @@ export function WeatherColumn({
     <div className="flex flex-col gap-4 w-full">
       {/* Hero Card */}
       <div
+        data-testid="hero-weather-card"
         className="flex flex-col gap-4 items-start overflow-hidden p-6 rounded-2xl shadow-[0px_4px_12px_0px_rgba(23,33,51,0.1)] w-full"
         style={{ background: theme.gradient }}
       >
@@ -1310,6 +1319,7 @@ export function WeatherColumn({
         <div className="grid grid-cols-2 gap-2 w-full pt-1">
           <button
             onClick={() => onOpenCopilot("weather_impact")}
+            data-testid="copilot-action-weather"
             className="flex items-center gap-2 p-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 text-left transition-all group cursor-pointer"
           >
             <span className="text-[16px]">🌤️</span>
@@ -1321,6 +1331,7 @@ export function WeatherColumn({
 
           <button
             onClick={() => onOpenCopilot("news_digest")}
+            data-testid="copilot-action-news"
             className="flex items-center gap-2 p-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 text-left transition-all group cursor-pointer"
           >
             <span className="text-[16px]">📰</span>
@@ -1332,6 +1343,7 @@ export function WeatherColumn({
 
           <button
             onClick={() => onOpenCopilot("health_pm25")}
+            data-testid="copilot-action-pm25"
             className="flex items-center gap-2 p-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 text-left transition-all group cursor-pointer"
           >
             <span className="text-[16px]">🍃</span>
@@ -1343,6 +1355,7 @@ export function WeatherColumn({
 
           <button
             onClick={() => onOpenCopilot("smart_route")}
+            data-testid="copilot-action-route"
             className="flex items-center gap-2 p-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 text-left transition-all group cursor-pointer"
           >
             <span className="text-[16px]">🚗</span>
@@ -1355,6 +1368,7 @@ export function WeatherColumn({
 
         <button
           onClick={() => onOpenCopilot(null)}
+          data-testid="copilot-action-dialog"
           className="w-full mt-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#ff315f] via-rose-500 to-amber-500 hover:opacity-95 text-white font-['Inter:Semi_Bold'] font-semibold text-[13px] flex items-center justify-center gap-2 shadow-lg transition-all cursor-pointer"
         >
           <span>💬 Mở Hộp Thoại Tương Tác Trực Tiếp Với AI</span>
@@ -1459,6 +1473,7 @@ export function VideoHubSection({
         {categories.map((cat) => (
           <button
             key={cat.key}
+            data-testid={cat.key === "weather" ? "video-tab-weather" : `video-tab-${cat.key}`}
             onClick={() => setSelectedFilter(cat.key)}
             className={`px-4 py-2 rounded-full text-[12px] font-['Inter:Semi_Bold'] font-semibold whitespace-nowrap transition-all duration-200 cursor-pointer ${
               selectedFilter === cat.key
@@ -1474,6 +1489,7 @@ export function VideoHubSection({
       {/* Hero Spotlight Video Card */}
       {heroVideo && (
         <div
+          data-testid="hero-video-card"
           onClick={() => onPlayVideo(heroVideo)}
           className="group relative w-full h-[240px] md:h-[320px] rounded-3xl overflow-hidden cursor-pointer shadow-[0_10px_30px_rgba(23,33,51,0.15)] border border-[#e3e7ef] bg-black transition-transform duration-300 hover:scale-[1.01]"
         >
@@ -1859,6 +1875,7 @@ export function DesktopLayout({
   onSelectArticle,
   searchQuery,
   onSearchChange,
+  onStartVisualTest,
 }: {
   data: AppData;
   onPlayVideo: (v: VideoItem) => void;
@@ -1866,6 +1883,7 @@ export function DesktopLayout({
   onSelectArticle?: (article: NewsArticle) => void;
   searchQuery?: string;
   onSearchChange?: (q: string) => void;
+  onStartVisualTest?: () => void;
 }) {
   const displayNews = searchQuery?.trim()
     ? data.news.filter((n) =>
@@ -1884,7 +1902,7 @@ export function DesktopLayout({
     <div className="bg-[#f4f6fa] flex flex-col items-start w-full">
       {/* Top Header Dashboard */}
       <div className="bg-white border-b border-[#e3e7ef] flex h-[76px] items-center justify-between px-6 w-full shrink-0">
-        <div className="flex gap-4 items-center">
+        <div className="flex gap-3 items-center">
           <BrandLogo />
           <div className="hidden 2xl:flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#f4f6fa] border border-[#e3e7ef]">
             <span className="font-['Inter:Bold'] font-bold text-[#182033] text-[13px]">Dashboard</span>
@@ -1901,6 +1919,17 @@ export function DesktopLayout({
             <span>🤖 Antigravity Copilot</span>
             <span className="bg-white/20 text-[10px] font-extrabold px-1.5 py-0.5 rounded-full">AI ACTIVE</span>
           </button>
+          {onStartVisualTest && (
+            <button
+              data-testid="start-visual-test-btn"
+              onClick={onStartVisualTest}
+              className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white font-['Inter:Semi_Bold'] font-semibold text-[13px] shadow-sm transition-all cursor-pointer"
+              title="Chạy kiểm thử giao diện trực quan với con trỏ laser và hiệu ứng click"
+            >
+              <span>🧪 Test Trực Quan</span>
+              <span className="bg-white/20 text-[10px] font-extrabold px-1.5 py-0.5 rounded-full">5/5 MÀN HÌNH</span>
+            </button>
+          )}
         </div>
         <div className="bg-[#f4f6fa] border border-[#e3e7ef] focus-within:border-indigo-400 focus-within:bg-white flex gap-[10px] h-11 items-center overflow-hidden px-[14px] rounded-xl w-[320px] transition-all">
           <div className="relative shrink-0 size-[18px]">
@@ -1909,6 +1938,7 @@ export function DesktopLayout({
           <span className="sr-only">Tìm kiếm thời tiết, tin tức...</span>
           <input
             type="text"
+            data-testid="header-search-input"
             value={searchQuery || ""}
             onChange={(e) => onSearchChange?.(e.target.value)}
             placeholder="Tìm kiếm thời tiết, tin tức..."
@@ -1916,6 +1946,7 @@ export function DesktopLayout({
           />
           {searchQuery && (
             <button
+              data-testid="clear-search-btn"
               onClick={() => onSearchChange?.("")}
               className="text-gray-400 hover:text-gray-600 text-xs px-1 cursor-pointer"
               aria-label="Xóa tìm kiếm"
@@ -1962,6 +1993,7 @@ export function DesktopLayout({
           {/* Featured News Card */}
           {feat && (
             <div
+              data-testid="featured-article-card"
               onClick={() => onSelectArticle?.(feat)}
               className="bg-white flex flex-col gap-3 items-start overflow-hidden p-5 rounded-2xl shadow-[0px_4px_12px_0px_rgba(23,33,51,0.1)] w-full cursor-pointer hover:shadow-xl transition-all border border-transparent hover:border-indigo-100 group"
             >
@@ -2104,7 +2136,17 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [copilotOpen, setCopilotOpen] = useState(false);
   const [activeAction, setActiveAction] = useState<string | null>(null);
+  const [visualTestOpen, setVisualTestOpen] = useState(false);
   const refreshRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("test") === "true" || params.get("autotest") === "true") {
+        setVisualTestOpen(true);
+      }
+    }
+  }, []);
 
   const handleOpenCopilot = useCallback((action: string | null = null) => {
     setActiveAction(action);
@@ -2195,6 +2237,20 @@ export default function App() {
         }}
       />
 
+      {/* Visual UI Simulation Test Runner with Virtual Laser Cursor */}
+      <VisualTestRunner
+        data={data}
+        isOpen={visualTestOpen}
+        onClose={() => setVisualTestOpen(false)}
+        onOpenCopilot={handleOpenCopilot}
+        onCloseCopilot={() => setCopilotOpen(false)}
+        onPlayVideo={setActiveVideo}
+        onCloseVideo={() => setActiveVideo(null)}
+        onSelectArticle={setActiveArticle}
+        onCloseArticle={() => setActiveArticle(null)}
+        onSearch={setSearchQuery}
+      />
+
       {/* Responsive Breakpoints */}
       <div className="md:hidden">
         <MobileLayout
@@ -2220,6 +2276,7 @@ export default function App() {
           onSelectArticle={setActiveArticle}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
+          onStartVisualTest={() => setVisualTestOpen(true)}
         />
       </div>
 
@@ -2239,6 +2296,23 @@ export default function App() {
         </div>
         <span className="bg-white/20 text-[10px] font-extrabold px-1.5 py-0.5 rounded-full sm:hidden">
           AI
+        </span>
+      </button>
+
+      {/* Floating Visual UI Test Simulation Button */}
+      <button
+        data-testid="floating-visual-test-btn"
+        onClick={() => setVisualTestOpen(true)}
+        className="fixed bottom-6 left-6 z-40 flex items-center gap-2.5 px-4 py-3 rounded-full bg-slate-900/95 hover:bg-slate-900 text-white backdrop-blur-md font-['Inter:Semi_Bold'] font-semibold text-[13px] shadow-[0_10px_25px_rgba(0,0,0,0.35)] hover:shadow-[0_15px_30px_rgba(16,185,129,0.3)] hover:scale-105 active:scale-95 transition-all cursor-pointer border border-emerald-500/40"
+        aria-label="Kích hoạt kiểm thử trực quan 5 màn hình"
+      >
+        <span className="text-[18px]">🎯</span>
+        <div className="flex flex-col items-start leading-none text-left hidden sm:flex">
+          <span className="text-[12px] font-bold text-emerald-400">Kiểm Thử Trực Quan</span>
+          <span className="text-[10px] text-gray-300 mt-0.5">Con trỏ laser & Click ảo</span>
+        </div>
+        <span className="bg-emerald-500 text-slate-950 font-black text-[9px] px-2 py-0.5 rounded-full">
+          RUN UI TEST
         </span>
       </button>
     </div>
