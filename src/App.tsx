@@ -43,7 +43,7 @@ interface WeatherTheme {
   routeItems?: string[];
 }
 
-const WEATHER_THEMES: Record<ConditionKey, WeatherTheme> = {
+export const WEATHER_THEMES: Record<ConditionKey, WeatherTheme> = {
   "binh-thuong": {
     key: "binh-thuong",
     gradient: "linear-gradient(135deg, #506477 0%, #73879a 50%, #9aa9b5 100%)",
@@ -128,7 +128,7 @@ const WEATHER_THEMES: Record<ConditionKey, WeatherTheme> = {
 
 // ── Determine weather condition from API data ─────────────────────────────
 
-function detectCondition(temp: number, feelsLike: number, desc: string, pop: number, humidity: number): ConditionKey {
+export function detectCondition(temp: number, feelsLike: number, desc: string, pop: number, humidity: number): ConditionKey {
   const d = desc.toLowerCase();
   const isRain = ["mưa", "dông", "giông", "bão", "rào", "rain", "drizzle", "thunder", "storm"].some(k => d.includes(k));
   const isStorm = ["dông", "giông", "sấm", "thunder", "storm"].some(k => d.includes(k)) || (isRain && pop >= 80);
@@ -186,7 +186,7 @@ export interface VideoItem {
   duration?: string;
 }
 
-interface AppData {
+export interface AppData {
   weather: LiveWeather;
   forecast: ForecastItem[];
   news: NewsArticle[];
@@ -197,7 +197,7 @@ interface AppData {
 
 // ── Verified Rich Video Catalog (100% Video Dài, Không Dùng Shorts, Mới Nhất) ──
 
-const FALLBACK_VIDEOS: VideoItem[] = [
+export const FALLBACK_VIDEOS: VideoItem[] = [
   {
     id: "iVF4Jr-xoWk",
     title: "Đường đi biến thành nơi tập kết rác tại Lạc Đạo, Hưng Yên",
@@ -509,7 +509,7 @@ function onImgError(e: React.SyntheticEvent<HTMLImageElement>, idx: number) {
 
 // ── Interactive Cinema Video Modal ────────────────────────────────────────
 
-function VideoModal({ video, onClose }: { video: VideoItem | null; onClose: () => void }) {
+export function VideoModal({ video, onClose }: { video: VideoItem | null; onClose: () => void }) {
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
@@ -588,7 +588,7 @@ function VideoModal({ video, onClose }: { video: VideoItem | null; onClose: () =
 
 // ── Antigravity Copilot Client & Fallback Engine ──────────────────────────
 
-async function callCopilotAPI(
+export async function callCopilotAPI(
   prompt: string,
   action: string,
   context: any
@@ -617,7 +617,7 @@ async function callCopilotAPI(
   return generateClientCopilotFallback(action, prompt, context);
 }
 
-function generateClientCopilotFallback(action: string, prompt: string, context: any) {
+export function generateClientCopilotFallback(action: string, prompt: string, context: any) {
   const temp = context?.temp ?? 26.5;
   const feelsLike = context?.feelsLike ?? 27.8;
   const desc = context?.desc ?? "Nhiều mây";
@@ -687,7 +687,7 @@ interface CopilotModalProps {
   initialAction?: string | null;
 }
 
-function AntigravityCopilotModal({ isOpen, onClose, data, initialAction }: CopilotModalProps) {
+export function AntigravityCopilotModal({ isOpen, onClose, data, initialAction }: CopilotModalProps) {
   const [messages, setMessages] = useState<Array<{
     sender: "user" | "copilot";
     text: string;
@@ -700,7 +700,7 @@ function AntigravityCopilotModal({ isOpen, onClose, data, initialAction }: Copil
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    messagesEndRef.current?.scrollIntoView?.({ behavior: "smooth" });
   };
 
   useEffect(() => {
@@ -1014,7 +1014,7 @@ function AntigravityCopilotModal({ isOpen, onClose, data, initialAction }: Copil
 
 // ── Weather Section (Left Column) ─────────────────────────────────────────
 
-function WeatherColumn({
+export function WeatherColumn({
   data,
   onOpenCopilot,
 }: {
@@ -1204,7 +1204,7 @@ function WeatherColumn({
 
 // ── Ultra-Stylish Video Hub Component ─────────────────────────────────────
 
-function VideoHubSection({
+export function VideoHubSection({
   videos,
   onPlayVideo,
 }: {
@@ -1399,7 +1399,7 @@ function VideoHubSection({
 
 // ── Mobile Layout ─────────────────────────────────────────────────────────
 
-function MobileLayout({
+export function MobileLayout({
   data,
   onPlayVideo,
   onOpenCopilot,
@@ -1497,7 +1497,7 @@ const TAB_CATS = [
   { cat: "ĐỜI SỐNG", bg: "bg-[#f0fdf4]", color: "text-[#166534]" },
 ];
 
-function TabletLayout({
+export function TabletLayout({
   data,
   onPlayVideo,
   onOpenCopilot,
@@ -1617,7 +1617,7 @@ function TabletLayout({
 
 // ── Desktop Layout ────────────────────────────────────────────────────────
 
-function DesktopLayout({
+export function DesktopLayout({
   data,
   onPlayVideo,
   onOpenCopilot,
