@@ -21,6 +21,8 @@ import {
   AntigravityCopilotModal,
   VideoHubSection,
   VideoModal,
+  BrandLogo,
+  ArticleDetailModal,
   DesktopLayout,
   TabletLayout,
   MobileLayout,
@@ -387,4 +389,75 @@ describe('Màn hình 4 & 5: Tin tức và Giao diện Responsive (SCR-NEWS-04 & 
     expect(screen.getAllByText(/pulse./i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Copilot/i).length).toBeGreaterThan(0);
   });
+
+  it('F-NEW-01: ArticleDetailModal hiển thị chi tiết nội dung bài viết, tóm tắt AI và nút điều hướng', () => {
+    const onCloseMock = vi.fn();
+    const onCopilotPromptMock = vi.fn();
+    const testArticle = mockData.news[0];
+
+    // Khi article = null: Không render modal
+    const { rerender } = render(
+      <ArticleDetailModal
+        article={null}
+        onClose={onCloseMock}
+        onOpenCopilotWithContext={onCopilotPromptMock}
+      />
+    );
+    expect(screen.queryByText(testArticle.title)).toBeNull();
+
+    // Mở modal bài viết
+    rerender(
+      <ArticleDetailModal
+        article={testArticle}
+        onClose={onCloseMock}
+        onOpenCopilotWithContext={onCopilotPromptMock}
+      />
+    );
+
+    // Tiêu đề & Tòa soạn
+    expect(screen.getByText(testArticle.title)).toBeDefined();
+    expect(screen.getAllByText(new RegExp(testArticle.source, "i")).length).toBeGreaterThan(0);
+
+    // Hộp Tóm tắt nhanh bởi Antigravity Copilot
+    expect(screen.getByText(/Tóm Tắt Nhanh Bởi Antigravity Copilot/i)).toBeDefined();
+    expect(screen.getByText(/AI INSIGHT/i)).toBeDefined();
+
+    // Nút Hỏi Copilot về bài này
+    const btnAskCopilot = screen.getByText(/Hỏi Copilot về bài này/i);
+    expect(btnAskCopilot).toBeDefined();
+    fireEvent.click(btnAskCopilot);
+    expect(onCopilotPromptMock).toHaveBeenCalled();
+    expect(onCloseMock).toHaveBeenCalled();
+  });
+
+  it('F-LAY-03: BrandLogo nhận diện thương hiệu chuẩn xác và bộ lọc tìm kiếm tin tức tức thời', () => {
+    // 1. BrandLogo
+    render(<BrandLogo />);
+    expect(screen.getByText(/pulse./i)).toBeDefined();
+    expect(screen.getByText(/TIỀN PHONG/i)).toBeDefined();
+    expect(screen.getByText(/Tin tức & Thời tiết Đô thị 24\/7/i)).toBeDefined();
+
+    // 2. DesktopLayout với search query
+    const onSearchChangeMock = vi.fn();
+    const { rerender } = render(
+      <DesktopLayout
+        data={mockData}
+        onPlayVideo={vi.fn()}
+        onOpenCopilot={vi.fn()}
+        searchQuery="công nghệ"
+        onSearchChange={onSearchChangeMock}
+      />
+    );
+
+    // Hiển thị thanh thông báo kết quả tìm kiếm
+    expect(screen.getByText(/Tìm thấy/i)).toBeDefined();
+    expect(screen.getAllByText(/công nghệ/i).length).toBeGreaterThanOrEqual(1);
+
+    // Nút Xóa bộ lọc
+    const btnClear = screen.getByText(/Xóa bộ lọc/i);
+    expect(btnClear).toBeDefined();
+    fireEvent.click(btnClear);
+    expect(onSearchChangeMock).toHaveBeenCalledWith("");
+  });
 });
+

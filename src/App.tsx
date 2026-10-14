@@ -14,6 +14,33 @@ const imgTabletNews5 = `${assetPathPrefix}/ef83c.png`;
 const imgDesktopNews3 = `${assetPathPrefix}/d84e7.png`;
 const imgDesktopNews4 = `${assetPathPrefix}/6ef75.png`;
 const imgDesktopNews5 = `${assetPathPrefix}/740c6.png`;
+const imgLocationPin = `${assetPathPrefix}/0eabf.svg`;
+const imgClock = `${assetPathPrefix}/c681b.svg`;
+
+export function BrandLogo({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
+  const isSm = size === "sm";
+  return (
+    <div className="flex items-center gap-2.5 group cursor-pointer select-none">
+      <div className="relative flex items-center justify-center shrink-0">
+        <div className={`${isSm ? "size-7 rounded-lg" : "size-9 rounded-xl"} bg-gradient-to-tr from-[#ff315f] via-[#f72585] to-[#f7a928] flex items-center justify-center shadow-md shadow-[#ff315f]/25 group-hover:scale-105 transition-transform`}>
+          <span className={`text-white ${isSm ? "text-[14px]" : "text-[18px]"} font-black`}>P</span>
+        </div>
+        <span className="absolute -bottom-0.5 -right-0.5 size-2 rounded-full bg-emerald-400 border-2 border-white animate-pulse" />
+      </div>
+      <div className="flex flex-col items-start leading-none">
+        <div className="flex items-center gap-1.5">
+          <span className={`font-['Inter:Extra_Bold'] font-black text-[#ff315f] ${isSm ? "text-[17px]" : "text-[20px]"} tracking-tight`}>pulse.</span>
+          <span className="bg-gradient-to-r from-[#ff315f] to-[#f97316] text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider shadow-xs">
+            TIỀN PHONG
+          </span>
+        </div>
+        <span className="text-[10px] text-[#5f687b] font-medium tracking-tight mt-0.5 hidden sm:inline">
+          Tin tức & Thời tiết Đô thị 24/7
+        </span>
+      </div>
+    </div>
+  );
+}
 
 const FALLBACK_NEWS_IMAGES = [imgNews1, imgNews2, imgNews3, imgNews4, imgNews5];
 const TABLET_FALLBACK_IMAGES = [imgNews1, imgTabletNews3, imgTabletNews4, imgTabletNews5];
@@ -580,6 +607,184 @@ export function VideoModal({ video, onClose }: { video: VideoItem | null; onClos
             <span>{video.published}</span>
           </div>
           <p className="text-[12px] text-[#6b7280]">Nhấn ESC hoặc ✕ để thoát chế độ rạp chiếu</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Interactive Article Detail Modal (Đọc bài viết chi tiết & Tóm tắt AI) ─
+
+export function ArticleDetailModal({
+  article,
+  onClose,
+  onOpenCopilotWithContext,
+}: {
+  article: NewsArticle | null;
+  onClose: () => void;
+  onOpenCopilotWithContext?: (prompt: string) => void;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    if (article) {
+      document.body.style.overflow = "hidden";
+      window.addEventListener("keydown", handleKeyDown);
+    }
+    return () => {
+      document.body.style.overflow = "auto";
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [article, onClose]);
+
+  if (!article) return null;
+
+  const handleCopyLink = () => {
+    if (article.link && article.link !== "#") {
+      navigator.clipboard?.writeText?.(article.link);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const handleAskCopilot = () => {
+    if (onOpenCopilotWithContext) {
+      onOpenCopilotWithContext(`Phân tích ý nghĩa và tác động của bài viết: "${article.title}"`);
+    }
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 md:p-8 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="relative w-full max-w-3xl max-h-[90vh] bg-white rounded-3xl overflow-hidden shadow-2xl flex flex-col border border-[#e3e7ef]">
+        {/* Modal Header */}
+        <div className="flex items-center justify-between px-6 py-4 bg-white border-b border-[#e3e7ef] shrink-0">
+          <div className="flex items-center gap-2.5">
+            <span className="bg-[#ffe8ee] text-[#ff315f] text-[11px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider">
+              {article.source || "Báo Tiền Phong"}
+            </span>
+            <span className="text-[12px] text-[#5f687b] flex items-center gap-1.5">
+              <img src={imgClock} alt="time" className="size-3.5 opacity-60 inline" />
+              <span>Vừa cập nhật · 2 phút đọc</span>
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleCopyLink}
+              title="Sao chép liên kết"
+              className="px-3 py-1.5 rounded-full bg-[#f4f6fa] hover:bg-[#e9ecf2] text-[#5f687b] text-[12px] font-medium transition-colors flex items-center gap-1 cursor-pointer"
+            >
+              {copied ? "✓ Đã sao chép" : "🔗 Sao chép"}
+            </button>
+            <button
+              onClick={onClose}
+              aria-label="Đóng chi tiết bài viết"
+              className="size-8 rounded-full bg-[#f4f6fa] hover:bg-[#e3e7ef] text-[#182033] flex items-center justify-center text-[16px] font-bold transition-colors cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+
+        {/* Modal Body (Scrollable) */}
+        <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-6">
+          {/* Article Title */}
+          <h2 className="font-['Inter:Bold'] font-extrabold text-[#182033] text-[22px] md:text-[26px] leading-snug tracking-tight">
+            {article.title}
+          </h2>
+
+          {/* Article Image Banner */}
+          {article.image && (
+            <div className="relative rounded-2xl overflow-hidden w-full max-h-[360px] bg-[#f4f6fa] border border-[#e3e7ef]">
+              <img
+                src={article.image}
+                alt={article.title}
+                onError={(e) => {
+                  e.currentTarget.onerror = null;
+                  e.currentTarget.src = FALLBACK_NEWS_IMAGES[0];
+                }}
+                className="w-full h-full object-cover max-h-[360px]"
+              />
+              <div className="absolute bottom-2 right-3 bg-black/60 backdrop-blur-sm text-white/90 text-[11px] px-2.5 py-0.5 rounded-md">
+                Nguồn: {article.source || "Ảnh báo chí"}
+              </div>
+            </div>
+          )}
+
+          {/* Copilot AI Smart Summary Card */}
+          <div className="bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 border border-indigo-200/70 rounded-2xl p-5 shadow-xs">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-[18px]">🤖</span>
+                <span className="font-['Inter:Bold'] font-bold text-indigo-950 text-[13px] uppercase tracking-wide">
+                  Tóm Tắt Nhanh Bởi Antigravity Copilot
+                </span>
+              </div>
+              <span className="bg-indigo-600/10 text-indigo-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                AI INSIGHT
+              </span>
+            </div>
+
+            <div className="space-y-2 text-[13px] text-indigo-950/80 leading-relaxed">
+              <p className="flex items-start gap-2">
+                <span className="text-indigo-600 font-bold">•</span>
+                <span><strong>Trọng tâm sự kiện:</strong> {article.description || article.title}</span>
+              </p>
+              <p className="flex items-start gap-2">
+                <span className="text-indigo-600 font-bold">•</span>
+                <span><strong>Tác động đô thị:</strong> Thông tin có ý nghĩa lớn đối với an toàn sinh hoạt, lộ trình giao thông và sự chủ động của người dân Thủ đô.</span>
+              </p>
+              <p className="flex items-start gap-2">
+                <span className="text-indigo-600 font-bold">•</span>
+                <span><strong>Khuyến nghị từ AI:</strong> Bạn có thể theo dõi thêm diễn biến trên các phương tiện truyền thông chính thống hoặc hỏi trực tiếp Copilot để cập nhật chi tiết.</span>
+              </p>
+            </div>
+          </div>
+
+          {/* Full description / content */}
+          <div className="space-y-4 text-[#334155] leading-relaxed text-[15px]">
+            <p className="font-semibold text-[#1e293b] text-[16px] leading-relaxed">
+              {article.description}
+            </p>
+            <p className="text-[#475569]">
+              Bài viết được đăng tải chính thức bởi <strong>{article.source || "Tòa soạn"}</strong>. Để bảo đảm tính chính xác và đầy đủ nhất của toàn văn bài viết, video phóng sự và tư liệu liên quan, bạn đọc có thể truy cập trực tiếp bài báo gốc thông qua nút chuyển hướng phía dưới.
+            </p>
+          </div>
+        </div>
+
+        {/* Modal Footer Actions */}
+        <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 bg-[#f8fafc] border-t border-[#e3e7ef] shrink-0">
+          <button
+            onClick={handleAskCopilot}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 via-indigo-600 to-rose-500 hover:opacity-95 text-white font-['Inter:Semi_Bold'] font-semibold text-[13px] shadow-sm transition-all cursor-pointer"
+          >
+            <span>🤖 Hỏi Copilot về bài này</span>
+            <span>→</span>
+          </button>
+
+          <div className="flex items-center gap-2">
+            {article.link && article.link !== "#" && (
+              <a
+                href={article.link}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#182033] hover:bg-[#25324d] text-white font-['Inter:Semi_Bold'] font-semibold text-[13px] transition-all no-underline shadow-sm"
+              >
+                <span>Đọc bài gốc trên {article.source || "báo"}</span>
+                <span>↗</span>
+              </a>
+            )}
+            <button
+              onClick={onClose}
+              className="px-4 py-2.5 rounded-xl bg-white border border-[#e3e7ef] hover:bg-[#f1f5f9] text-[#5f687b] font-medium text-[13px] transition-colors cursor-pointer"
+            >
+              Đóng
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -1403,16 +1608,18 @@ export function MobileLayout({
   data,
   onPlayVideo,
   onOpenCopilot,
+  onSelectArticle,
 }: {
   data: AppData;
   onPlayVideo: (v: VideoItem) => void;
   onOpenCopilot: (action: string | null) => void;
+  onSelectArticle?: (article: NewsArticle) => void;
 }) {
   return (
     <div className="bg-[#f4f6fa] flex flex-col items-start w-full">
       {/* Header bar */}
       <div className="bg-white border-b border-[#e3e7ef] flex h-[72px] items-center justify-between px-4 w-full shrink-0">
-        <p className="font-['Inter:Bold'] font-bold text-[#ff315f] text-[20px]">pulse.</p>
+        <BrandLogo size="sm" />
         <div className="flex items-center gap-2">
           <button
             onClick={() => onOpenCopilot(null)}
@@ -1421,9 +1628,12 @@ export function MobileLayout({
             <span className="size-1.5 rounded-full bg-emerald-400 animate-pulse" />
             <span>🤖 Copilot</span>
           </button>
-          <p className="font-['Inter:Regular'] font-normal text-[#5f687b] text-[11px]">
-            {data.location} · {data.updateTime}
-          </p>
+          <div className="bg-[#f4f6fa] px-2.5 py-1 rounded-full border border-[#e3e7ef] flex items-center gap-1">
+            <img src={imgClock} alt="time" className="size-3 opacity-60 inline" />
+            <p className="font-['Inter:Regular'] font-normal text-[#5f687b] text-[11px]">
+              {data.location} · {data.updateTime}
+            </p>
+          </div>
         </div>
       </div>
 
@@ -1439,40 +1649,45 @@ export function MobileLayout({
 
         {/* News Feed */}
         <div className="flex flex-col gap-3 items-start w-full mt-2">
-          <p className="font-['Inter:Semi_Bold'] font-semibold leading-[26px] text-[#182033] text-[20px]">
-            Tin Tức Mới Nhất · {data.news.length} bài
-          </p>
+          <div className="flex items-center justify-between w-full">
+            <p className="font-['Inter:Semi_Bold'] font-semibold leading-[26px] text-[#182033] text-[20px]">
+              Tin Tức Mới Nhất · {data.news.length} bài
+            </p>
+            <span className="text-[11px] text-[#ff315f] font-semibold">Chạm để đọc chi tiết</span>
+          </div>
           {data.news.slice(0, 5).map((item, i) => (
-            <a
+            <div
               key={i}
-              href={item.link}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="bg-white flex flex-col gap-[14px] items-start overflow-hidden p-4 rounded-2xl shadow-[0px_4px_12px_0px_rgba(23,33,51,0.1)] w-full no-underline hover:shadow-lg transition-shadow"
+              onClick={() => onSelectArticle?.(item)}
+              className="bg-white flex flex-col gap-[12px] items-start overflow-hidden p-4 rounded-2xl shadow-[0px_4px_12px_0px_rgba(23,33,51,0.1)] w-full cursor-pointer hover:shadow-lg transition-shadow border border-transparent active:border-indigo-100"
             >
-              <div className="flex gap-[10px] items-center overflow-hidden w-full">
-                <img
-                  alt=""
-                  className="rounded-full shrink-0 size-11 object-cover bg-[#f4f6fa]"
-                  src={item.image || FALLBACK_NEWS_IMAGES[i % 5]}
-                  onError={(e) => onImgError(e, i)}
-                />
-                <div className="flex flex-1 flex-col items-start min-w-0 overflow-hidden">
-                  <p className="font-['Inter:Semi_Bold'] font-semibold text-[#182033] text-[14px] line-clamp-1">
-                    {item.title}
-                  </p>
-                  <p className="font-['Inter:Regular'] font-normal text-[#5f687b] text-[12px]">
-                    {item.source}
-                  </p>
+              <div className="flex gap-[10px] items-center justify-between w-full">
+                <div className="flex gap-[10px] items-center overflow-hidden flex-1">
+                  <img
+                    alt=""
+                    className="rounded-full shrink-0 size-10 object-cover bg-[#f4f6fa]"
+                    src={item.image || FALLBACK_NEWS_IMAGES[i % 5]}
+                    onError={(e) => onImgError(e, i)}
+                  />
+                  <div className="flex flex-1 flex-col items-start min-w-0 overflow-hidden">
+                    <p className="font-['Inter:Semi_Bold'] font-semibold text-[#182033] text-[14px] line-clamp-1">
+                      {item.title}
+                    </p>
+                    <p className="font-['Inter:Regular'] font-normal text-[#5f687b] text-[12px]">
+                      {item.source} · Vừa cập nhật
+                    </p>
+                  </div>
                 </div>
                 <div className="relative shrink-0 size-5">
-                  <img alt="" className="absolute inset-0 size-full" src={imgMoreHorizontal} />
+                  <img alt="" className="absolute inset-0 size-full opacity-60" src={imgMoreHorizontal} />
                 </div>
               </div>
-              <p className="font-['Inter:Regular'] font-normal leading-[21px] text-[#182033] text-[14px]">
+
+              <p className="font-['Inter:Regular'] font-normal leading-[21px] text-[#182033] text-[14px] line-clamp-2">
                 {item.description}
               </p>
-              <div className="h-[180px] relative rounded-[10px] w-full overflow-hidden bg-[#f4f6fa]">
+
+              <div className="h-[180px] relative rounded-xl w-full overflow-hidden bg-[#f4f6fa]">
                 <img
                   alt=""
                   className="absolute inset-0 max-w-none object-cover size-full"
@@ -1480,7 +1695,20 @@ export function MobileLayout({
                   onError={(e) => onImgError(e, i)}
                 />
               </div>
-            </a>
+
+              <div className="flex items-center justify-between pt-1 w-full text-[12px]">
+                <span className="font-semibold text-[#ff315f]">📖 Đọc chi tiết bài viết →</span>
+                <a
+                  href={item.link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="text-[#5f687b] hover:text-[#182033]"
+                >
+                  Báo gốc ↗
+                </a>
+              </div>
+            </div>
           ))}
         </div>
       </div>
@@ -1501,10 +1729,12 @@ export function TabletLayout({
   data,
   onPlayVideo,
   onOpenCopilot,
+  onSelectArticle,
 }: {
   data: AppData;
   onPlayVideo: (v: VideoItem) => void;
   onOpenCopilot: (action: string | null) => void;
+  onSelectArticle?: (article: NewsArticle) => void;
 }) {
   const feat = data.news[0];
   const sides = data.news.slice(1, 5);
@@ -1514,8 +1744,11 @@ export function TabletLayout({
       {/* Header */}
       <div className="bg-white border-b border-[#e3e7ef] flex h-[72px] items-center justify-between px-6 w-full shrink-0">
         <div className="flex gap-3 items-center">
-          <p className="font-['Inter:Bold'] font-bold text-[#ff315f] text-[20px] whitespace-nowrap">pulse.</p>
-          <p className="font-['Inter:Medium'] font-medium text-[#5f687b] text-[13px] whitespace-nowrap">📍 {data.location}</p>
+          <BrandLogo size="sm" />
+          <div className="bg-[#f4f6fa] flex items-center gap-1.5 px-3 py-1 rounded-full border border-[#e3e7ef]">
+            <img src={imgLocationPin} alt="pin" className="size-3.5 opacity-60 inline" />
+            <p className="font-['Inter:Medium'] font-medium text-[#5f687b] text-[12px] whitespace-nowrap">{data.location}</p>
+          </div>
         </div>
         <div className="flex items-center gap-3">
           <button
@@ -1526,7 +1759,10 @@ export function TabletLayout({
             <span>🤖 Antigravity Copilot</span>
             <span className="bg-white/20 text-[9px] font-bold px-1.5 py-0.5 rounded-full">AI</span>
           </button>
-          <p className="font-['Inter:Regular'] font-normal text-[#5f687b] text-[11px] whitespace-nowrap">Cập nhật {data.updateTime}</p>
+          <div className="bg-[#f4f6fa] flex items-center gap-1.5 px-3 py-1 rounded-full border border-[#e3e7ef]">
+            <img src={imgClock} alt="time" className="size-3.5 opacity-60 inline" />
+            <p className="font-['Inter:Regular'] font-normal text-[#5f687b] text-[11px] whitespace-nowrap">Cập nhật {data.updateTime}</p>
+          </div>
         </div>
       </div>
 
@@ -1539,21 +1775,22 @@ export function TabletLayout({
 
           {/* News column */}
           <div className="flex flex-1 flex-col gap-3 items-start min-w-0 overflow-hidden">
-            <div className="flex flex-col gap-[2px] items-start">
-              <p className="font-['Inter:Bold'] font-bold text-[#182033] text-[20px] tracking-[-0.3px]">Tin tức</p>
-              <p className="font-['Inter:Regular'] font-normal text-[#5f687b] text-[12px]">{data.location} · {data.news.length} bài mới nhất</p>
+            <div className="flex items-center justify-between w-full">
+              <div className="flex flex-col gap-[2px] items-start">
+                <p className="font-['Inter:Bold'] font-bold text-[#182033] text-[20px] tracking-[-0.3px]">Tin tức</p>
+                <p className="font-['Inter:Regular'] font-normal text-[#5f687b] text-[12px]">{data.location} · {data.news.length} bài mới nhất</p>
+              </div>
+              <span className="text-[11px] text-[#ff315f] font-semibold">Chạm để đọc nhanh</span>
             </div>
             {feat && (
-              <a
-                href={feat.link}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="bg-white flex flex-col items-start overflow-hidden rounded-2xl shadow-[0px_4px_12px_0px_rgba(23,33,51,0.1)] w-full no-underline hover:shadow-lg transition-shadow"
+              <div
+                onClick={() => onSelectArticle?.(feat)}
+                className="bg-white flex flex-col items-start overflow-hidden rounded-2xl shadow-[0px_4px_12px_0px_rgba(23,33,51,0.1)] w-full cursor-pointer hover:shadow-lg transition-all border border-transparent hover:border-indigo-100 group"
               >
                 <div className="h-[180px] relative rounded-tl-2xl rounded-tr-2xl w-full overflow-hidden bg-[#f4f6fa]">
                   <img
                     alt=""
-                    className="absolute inset-0 max-w-none object-cover size-full"
+                    className="absolute inset-0 max-w-none object-cover size-full group-hover:scale-105 transition-transform duration-500"
                     src={feat.image || TABLET_FALLBACK_IMAGES[0]}
                     onError={(e) => onImgError(e, 0)}
                   />
@@ -1562,32 +1799,30 @@ export function TabletLayout({
                   </div>
                 </div>
                 <div className="flex flex-col gap-2 items-start p-[14px] w-full">
-                  <p className="font-['Inter:Bold'] font-bold leading-[22px] text-[#182033] text-[15px] w-full line-clamp-2">{feat.title}</p>
+                  <p className="font-['Inter:Bold'] font-bold leading-[22px] text-[#182033] text-[15px] w-full line-clamp-2 group-hover:text-[#ff315f] transition-colors">{feat.title}</p>
                   <p className="font-['Inter:Regular'] font-normal leading-[18px] text-[#5f687b] text-[12px] w-full line-clamp-2">{feat.description}</p>
-                  <div className="flex items-center justify-between pt-1 w-full">
+                  <div className="flex items-center justify-between pt-1 w-full border-t border-[#f4f6fa]">
                     <div className="flex gap-[6px] items-center">
                       <div className="bg-[#f7a928] rounded-[4px] size-2" />
                       <p className="font-['Inter:Semi_Bold'] font-semibold text-[#ff315f] text-[11px]">{feat.source}</p>
                     </div>
-                    <p className="font-['Inter:Regular'] font-normal text-[#5f687b] text-[11px]">{data.updateTime}</p>
+                    <span className="text-[11px] text-[#ff315f] font-semibold">Đọc chi tiết →</span>
                   </div>
                 </div>
-              </a>
+              </div>
             )}
             {sides.map((a, i) => {
               const c = TAB_CATS[i % TAB_CATS.length];
               return (
-                <a
+                <div
                   key={i}
-                  href={a.link}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="bg-white flex gap-3 items-center overflow-hidden p-3 rounded-[10px] shadow-[0px_4px_12px_0px_rgba(23,33,51,0.1)] w-full no-underline hover:shadow-lg transition-shadow"
+                  onClick={() => onSelectArticle?.(a)}
+                  className="bg-white flex gap-3 items-center overflow-hidden p-3 rounded-[10px] shadow-[0px_4px_12px_0px_rgba(23,33,51,0.1)] w-full cursor-pointer hover:shadow-lg transition-all border border-transparent hover:border-indigo-100 group"
                 >
                   <div className="relative rounded-[10px] shrink-0 size-[72px] overflow-hidden bg-[#f4f6fa]">
                     <img
                       alt=""
-                      className="absolute inset-0 max-w-none object-cover size-full"
+                      className="absolute inset-0 max-w-none object-cover size-full group-hover:scale-105 transition-transform duration-500"
                       src={a.image || TABLET_FALLBACK_IMAGES[(i + 1) % TABLET_FALLBACK_IMAGES.length]}
                       onError={(e) => onImgError(e, i + 1)}
                     />
@@ -1596,13 +1831,13 @@ export function TabletLayout({
                     <div className={`${c.bg} flex items-start px-[7px] py-[2px] rounded-[4px]`}>
                       <p className={`font-['Inter:Bold'] font-bold ${c.color} text-[10px]`}>{c.cat}</p>
                     </div>
-                    <p className="font-['Inter:Semi_Bold'] font-semibold leading-[19px] text-[#182033] text-[13px] line-clamp-2 w-full">{a.title}</p>
+                    <p className="font-['Inter:Semi_Bold'] font-semibold leading-[19px] text-[#182033] text-[13px] line-clamp-2 w-full group-hover:text-[#ff315f] transition-colors">{a.title}</p>
                     <div className="flex items-center justify-between text-[11px] w-full">
                       <p className="font-['Inter:Medium'] font-medium text-[#ff315f]">{a.source}</p>
-                      <p className="font-['Inter:Regular'] font-normal text-[#5f687b]">Vừa cập nhật</p>
+                      <span className="text-[#5f687b] group-hover:text-[#ff315f]">Đọc chi tiết →</span>
                     </div>
                   </div>
-                </a>
+                </div>
               );
             })}
           </div>
@@ -1621,13 +1856,26 @@ export function DesktopLayout({
   data,
   onPlayVideo,
   onOpenCopilot,
+  onSelectArticle,
+  searchQuery,
+  onSearchChange,
 }: {
   data: AppData;
   onPlayVideo: (v: VideoItem) => void;
   onOpenCopilot: (action: string | null) => void;
+  onSelectArticle?: (article: NewsArticle) => void;
+  searchQuery?: string;
+  onSearchChange?: (q: string) => void;
 }) {
-  const feat = data.news[0];
-  const grid = data.news.slice(1, 5);
+  const displayNews = searchQuery?.trim()
+    ? data.news.filter((n) =>
+        (n.title + " " + n.description + " " + n.source)
+          .toLowerCase()
+          .includes(searchQuery.trim().toLowerCase())
+      )
+    : data.news;
+  const feat = displayNews[0];
+  const grid = displayNews.slice(1, 5);
   const now = new Date();
   const days = ["Chủ nhật", "Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7"];
   const dateStr = `${days[now.getDay()]}, ${now.getDate()} Tháng ${now.getMonth() + 1} - ${data.updateTime}`;
@@ -1635,10 +1883,14 @@ export function DesktopLayout({
   return (
     <div className="bg-[#f4f6fa] flex flex-col items-start w-full">
       {/* Top Header Dashboard */}
-      <div className="bg-white border-b border-[#e3e7ef] flex h-[72px] items-center justify-between px-6 w-full shrink-0">
+      <div className="bg-white border-b border-[#e3e7ef] flex h-[76px] items-center justify-between px-6 w-full shrink-0">
         <div className="flex gap-4 items-center">
-          <p className="font-['Inter:Bold'] font-bold text-[#182033] text-[18px] whitespace-nowrap">Dashboard</p>
-          <div className="bg-[#f4f6fa] flex items-start px-3 py-1 rounded-full">
+          <BrandLogo />
+          <div className="hidden 2xl:flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#f4f6fa] border border-[#e3e7ef]">
+            <span className="font-['Inter:Bold'] font-bold text-[#182033] text-[13px]">Dashboard</span>
+          </div>
+          <div className="bg-[#f4f6fa] flex items-center gap-1.5 px-3 py-1 rounded-full border border-[#e3e7ef]">
+            <img src={imgClock} alt="time" className="size-3.5 opacity-60 inline" />
             <p className="font-['Inter:Regular'] font-normal text-[#5f687b] text-[12px] whitespace-nowrap">{dateStr}</p>
           </div>
           <button
@@ -1650,9 +1902,27 @@ export function DesktopLayout({
             <span className="bg-white/20 text-[10px] font-extrabold px-1.5 py-0.5 rounded-full">AI ACTIVE</span>
           </button>
         </div>
-        <div className="bg-[#f4f6fa] border border-[#e3e7ef] flex gap-[10px] h-12 items-center overflow-hidden px-[14px] rounded-[10px] w-[300px]">
-          <div className="relative shrink-0 size-[18px]"><img alt="" className="absolute inset-0 size-full" src={imgSearch} /></div>
-          <p className="font-['Inter:Regular'] font-normal leading-[21px] text-[#5f687b] text-[14px] whitespace-nowrap">Tìm kiếm thời tiết, tin tức...</p>
+        <div className="bg-[#f4f6fa] border border-[#e3e7ef] focus-within:border-indigo-400 focus-within:bg-white flex gap-[10px] h-11 items-center overflow-hidden px-[14px] rounded-xl w-[320px] transition-all">
+          <div className="relative shrink-0 size-[18px]">
+            <img alt="" className="absolute inset-0 size-full" src={imgSearch} />
+          </div>
+          <span className="sr-only">Tìm kiếm thời tiết, tin tức...</span>
+          <input
+            type="text"
+            value={searchQuery || ""}
+            onChange={(e) => onSearchChange?.(e.target.value)}
+            placeholder="Tìm kiếm thời tiết, tin tức..."
+            className="bg-transparent border-none text-[13px] text-[#182033] placeholder-[#5f687b] focus:outline-none w-full"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => onSearchChange?.("")}
+              className="text-gray-400 hover:text-gray-600 text-xs px-1 cursor-pointer"
+              aria-label="Xóa tìm kiếm"
+            >
+              ✕
+            </button>
+          )}
         </div>
       </div>
 
@@ -1677,66 +1947,120 @@ export function DesktopLayout({
             </div>
           </div>
 
+          {searchQuery && (
+            <div className="bg-indigo-50/80 border border-indigo-200/60 rounded-xl px-4 py-2.5 flex items-center justify-between text-[13px] text-indigo-950 w-full">
+              <span>🔍 Tìm thấy <strong>{displayNews.length}</strong> bài viết cho từ khóa "<strong>{searchQuery}</strong>"</span>
+              <button
+                onClick={() => onSearchChange?.("")}
+                className="text-[#ff315f] hover:underline font-semibold text-xs cursor-pointer"
+              >
+                Xóa bộ lọc ✕
+              </button>
+            </div>
+          )}
+
           {/* Featured News Card */}
           {feat && (
-            <a
-              href={feat.link}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="bg-white flex flex-col gap-[14px] items-start overflow-hidden p-4 rounded-2xl shadow-[0px_4px_12px_0px_rgba(23,33,51,0.1)] w-full no-underline hover:shadow-lg transition-shadow"
+            <div
+              onClick={() => onSelectArticle?.(feat)}
+              className="bg-white flex flex-col gap-3 items-start overflow-hidden p-5 rounded-2xl shadow-[0px_4px_12px_0px_rgba(23,33,51,0.1)] w-full cursor-pointer hover:shadow-xl transition-all border border-transparent hover:border-indigo-100 group"
             >
-              <div className="flex gap-[10px] items-center overflow-hidden w-full">
-                <div className="bg-[#ffe8ee] flex flex-col items-center justify-center overflow-hidden rounded-full shrink-0 size-11">
-                  <p className="font-['Inter:Bold'] font-bold text-[#ff315f] text-[15.84px]">{(feat.source || "N")[0]}</p>
+              <div className="flex gap-[10px] items-center justify-between w-full">
+                <div className="flex items-center gap-2.5">
+                  <div className="bg-[#ffe8ee] flex flex-col items-center justify-center overflow-hidden rounded-full shrink-0 size-10">
+                    <p className="font-['Inter:Bold'] font-bold text-[#ff315f] text-[15.84px]">{(feat.source || "N")[0]}</p>
+                  </div>
+                  <div className="flex flex-1 flex-col items-start min-w-0 overflow-hidden">
+                    <p className="font-['Inter:Semi_Bold'] font-semibold text-[#182033] text-[14px]">{feat.source}</p>
+                    <p className="font-['Inter:Regular'] font-normal text-[#5f687b] text-[12px]">Vừa cập nhật · Tin nổi bật</p>
+                  </div>
                 </div>
-                <div className="flex flex-1 flex-col items-start min-w-0 overflow-hidden">
-                  <p className="font-['Inter:Semi_Bold'] font-semibold text-[#182033] text-[14px]">{feat.source}</p>
-                  <p className="font-['Inter:Regular'] font-normal text-[#5f687b] text-[12px]">Vừa cập nhật</p>
+                <div className="flex items-center gap-2">
+                  <span className="bg-[#ff315f] text-white text-[10px] font-bold px-2 py-0.5 rounded-full">TIÊU ĐIỂM</span>
+                  <div className="relative shrink-0 size-5">
+                    <img alt="" className="absolute inset-0 size-full opacity-60" src={imgMoreHorizontal} />
+                  </div>
                 </div>
-                <div className="relative shrink-0 size-5"><img alt="" className="absolute inset-0 size-full" src={imgMoreHorizontal} /></div>
               </div>
-              <p className="font-['Inter:Regular'] font-normal leading-[21px] text-[#182033] text-[14px] w-full line-clamp-3">{feat.description || feat.title}</p>
-              <div className="h-[180px] relative rounded-[10px] w-full overflow-hidden bg-[#f4f6fa]">
+
+              {/* Title & Description */}
+              <div className="flex flex-col gap-1.5 w-full">
+                <h3 className="font-['Inter:Bold'] font-bold text-[#182033] text-[18px] leading-snug group-hover:text-[#ff315f] transition-colors line-clamp-2">
+                  {feat.title}
+                </h3>
+                <p className="font-['Inter:Regular'] font-normal leading-[21px] text-[#5f687b] text-[14px] w-full line-clamp-3">
+                  {feat.description}
+                </p>
+              </div>
+
+              <div className="h-[200px] relative rounded-xl w-full overflow-hidden bg-[#f4f6fa]">
                 <img
                   alt=""
-                  className="absolute inset-0 max-w-none object-cover size-full"
+                  className="absolute inset-0 max-w-none object-cover size-full group-hover:scale-102 transition-transform duration-500"
                   src={feat.image || DESKTOP_FALLBACK_IMAGES[0]}
                   onError={(e) => onImgError(e, 0)}
                 />
               </div>
-              <p className="font-['Inter:Regular'] font-normal text-[#5f687b] text-[13px]">{feat.source}</p>
-            </a>
+
+              <div className="flex items-center justify-between pt-1 w-full border-t border-[#f4f6fa] text-[13px]">
+                <span className="font-semibold text-[#ff315f] group-hover:translate-x-1 transition-transform">
+                  📖 Đọc chi tiết bài viết →
+                </span>
+                <a
+                  href={feat.link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="font-normal text-[#5f687b] hover:text-[#182033] no-underline"
+                >
+                  Nguồn: {feat.source} ↗
+                </a>
+              </div>
+            </div>
           )}
 
           {/* News Grid */}
           <div className="flex flex-wrap gap-3 items-start w-full">
             {grid.map((n, i) => (
-              <a
+              <div
                 key={i}
-                href={n.link}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="bg-white flex flex-col items-start overflow-hidden rounded-2xl shadow-[0px_4px_12px_0px_rgba(23,33,51,0.1)] w-[calc(50%-6px)] no-underline hover:shadow-lg transition-shadow"
+                onClick={() => onSelectArticle?.(n)}
+                className="bg-white flex flex-col items-start overflow-hidden rounded-2xl shadow-[0px_4px_12px_0px_rgba(23,33,51,0.1)] w-[calc(50%-6px)] cursor-pointer hover:shadow-xl transition-all border border-transparent hover:border-indigo-100 group"
               >
                 <div className="h-[140px] relative w-full overflow-hidden bg-[#f4f6fa]">
                   <img
                     alt=""
-                    className="absolute inset-0 max-w-none object-cover size-full"
+                    className="absolute inset-0 max-w-none object-cover size-full group-hover:scale-105 transition-transform duration-500"
                     src={n.image || DESKTOP_FALLBACK_IMAGES[(i + 1) % DESKTOP_FALLBACK_IMAGES.length]}
                     onError={(e) => onImgError(e, i + 1)}
                   />
+                  <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-sm text-white text-[10px] font-semibold px-2 py-0.5 rounded-full">
+                    {n.source}
+                  </div>
                 </div>
                 <div className="flex flex-col gap-[6px] items-start p-[14px] w-full">
-                  <div className="flex gap-2 items-center">
+                  <div className="flex gap-2 items-center justify-between w-full">
                     <div className="bg-[#ffe8ee] flex items-start px-2 py-[3px] rounded-full">
                       <p className="font-['Inter:Semi_Bold'] font-semibold text-[#ff315f] text-[11px]">{n.source}</p>
                     </div>
                     <p className="font-['Inter:Regular'] font-normal text-[#5f687b] text-[11px]">{data.updateTime}</p>
                   </div>
-                  <p className="font-['Inter:Bold'] font-bold leading-5 text-[#182033] text-[14px] w-full line-clamp-2">{n.title}</p>
+                  <p className="font-['Inter:Bold'] font-bold leading-5 text-[#182033] text-[14px] w-full line-clamp-2 group-hover:text-[#ff315f] transition-colors">{n.title}</p>
                   <p className="font-['Inter:Regular'] font-normal leading-[18px] text-[#5f687b] text-[12px] w-full line-clamp-2">{n.description}</p>
+                  <div className="flex items-center justify-between pt-1 w-full text-[11px] border-t border-[#f8fafc]">
+                    <span className="font-semibold text-[#ff315f]">Đọc chi tiết →</span>
+                    <a
+                      href={n.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-[#94a3b8] hover:text-[#475569]"
+                    >
+                      Báo gốc ↗
+                    </a>
+                  </div>
                 </div>
-              </a>
+              </div>
             ))}
           </div>
 
@@ -1776,6 +2100,8 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeVideo, setActiveVideo] = useState<VideoItem | null>(null);
+  const [activeArticle, setActiveArticle] = useState<NewsArticle | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const [copilotOpen, setCopilotOpen] = useState(false);
   const [activeAction, setActiveAction] = useState<string | null>(null);
   const refreshRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -1859,15 +2185,42 @@ export default function App() {
       {/* Cinema Mode Video Modal */}
       <VideoModal video={activeVideo} onClose={() => setActiveVideo(null)} />
 
+      {/* Interactive Article Detail Modal */}
+      <ArticleDetailModal
+        article={activeArticle}
+        onClose={() => setActiveArticle(null)}
+        onOpenCopilotWithContext={(prompt) => {
+          setCopilotOpen(true);
+          setActiveAction("general_chat");
+        }}
+      />
+
       {/* Responsive Breakpoints */}
       <div className="md:hidden">
-        <MobileLayout data={data} onPlayVideo={setActiveVideo} onOpenCopilot={handleOpenCopilot} />
+        <MobileLayout
+          data={data}
+          onPlayVideo={setActiveVideo}
+          onOpenCopilot={handleOpenCopilot}
+          onSelectArticle={setActiveArticle}
+        />
       </div>
       <div className="hidden md:block xl:hidden">
-        <TabletLayout data={data} onPlayVideo={setActiveVideo} onOpenCopilot={handleOpenCopilot} />
+        <TabletLayout
+          data={data}
+          onPlayVideo={setActiveVideo}
+          onOpenCopilot={handleOpenCopilot}
+          onSelectArticle={setActiveArticle}
+        />
       </div>
       <div className="hidden xl:block">
-        <DesktopLayout data={data} onPlayVideo={setActiveVideo} onOpenCopilot={handleOpenCopilot} />
+        <DesktopLayout
+          data={data}
+          onPlayVideo={setActiveVideo}
+          onOpenCopilot={handleOpenCopilot}
+          onSelectArticle={setActiveArticle}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+        />
       </div>
 
       {/* Floating Antigravity Copilot Launcher Button */}
