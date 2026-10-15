@@ -89,24 +89,30 @@ def load_env_file():
 
 load_env_file()
 
-# --- CẤU HÌNH BẢO MẬT: Đọc 100% từ biến môi trường, KHÔNG hardcode token ---
-TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
-ZALO_WEBHOOK_URL   = os.environ.get("ZALO_WEBHOOK_URL", "https://hook.eu1.make.com/9ruvgdciavfa1k6xf2vzpkn6zk2umnc7")
-CALENDAR_ID        = os.environ.get("CALENDAR_ID", "mrkun28@gmail.com")
+from crypto_vault import CryptoVaultManager
+_vault = CryptoVaultManager()
 
-AUTHORIZED_USERNAME  = os.environ.get("AUTHORIZED_USERNAME", "anaa2700")
-OPENWEATHER_API_KEY  = os.environ.get("OPENWEATHER_API_KEY", "a201c471567522a7d0b7a0567ad245fe")
-POWERPOINT_FOLDER_ID = os.environ.get("POWERPOINT_FOLDER_ID", "1BwFCLX0Fjag9xM13mHIJTOYvZ6dYW5Ox")
-DOC_LOGIC_ID         = os.environ.get("DOC_LOGIC_ID", "1a9_qNqFEpbmuIoKuEvT3cExHzpszov4THOfm1ztCZc8")
-DOC_NEWS_ID          = os.environ.get("DOC_NEWS_ID", "NHẬP_ID_FILE_DOCS_TIN_TỨC_VÀO_ĐÂY")
+# --- CẤU HÌNH BẢO MẬT: Đọc 100% từ biến môi trường hoặc giải mã qua CryptoVault (Zero GitHub Leak) ---
+TELEGRAM_BOT_TOKEN = _vault.secure_get("TELEGRAM_BOT_TOKEN")
+ZALO_WEBHOOK_URL   = _vault.secure_get("ZALO_WEBHOOK_URL")
+CALENDAR_ID        = _vault.secure_get("CALENDAR_ID") or "mrkun28@gmail.com"
+
+AUTHORIZED_USERNAME  = _vault.secure_get("AUTHORIZED_USERNAME") or "anaa2700"
+OPENWEATHER_API_KEY  = _vault.secure_get("OPENWEATHER_API_KEY")
+POWERPOINT_FOLDER_ID = _vault.secure_get("POWERPOINT_FOLDER_ID")
+DOC_LOGIC_ID         = _vault.secure_get("DOC_LOGIC_ID")
+DOC_NEWS_ID          = _vault.secure_get("DOC_NEWS_ID")
+GEMINI_API_KEY       = _vault.secure_get("GEMINI_API_KEY")
 
 if not TELEGRAM_BOT_TOKEN:
     if os.environ.get("FLASK_ENV") == "testing" or os.environ.get("TESTING") == "1" or "unittest" in sys.modules or "pytest" in sys.modules:
         TELEGRAM_BOT_TOKEN = "TEST_MOCK_TELEGRAM_BOT_TOKEN"
     else:
-        TELEGRAM_BOT_TOKEN = os.environ.get("TEST_BOT_TOKEN", "TEST_MOCK_TELEGRAM_BOT_TOKEN")
+        TELEGRAM_BOT_TOKEN = os.environ.get("TEST_BOT_TOKEN", "")
 
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AQ.Ab8RN6IBgzuK4JMCYVYWqDeRpTsOgfqxIWnUxw82IBe49xb-sA")
+if not TELEGRAM_BOT_TOKEN and os.environ.get("RUN_MODE") != "TEST":
+    # Cảnh báo bảo mật khi chưa nạp token
+    print("⚠️  TELEGRAM_BOT_TOKEN chưa được cung cấp qua biến môi trường hoặc CryptoVault.")
 
 URL_ANH_NGAP = "https://media.vov.vn/sites/default/files/styles/large/public/2023-09/z4733804825595_067963dce63fbb5cc632616f73db2f26.jpg"
 URL_ANH_NANG = "https://vtv1.mediacdn.vn/zoom/640_400/2023/5/17/nang-nong-ha-noi-ttxvn-1684307525357876878345.jpg"
