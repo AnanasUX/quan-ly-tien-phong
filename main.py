@@ -1779,7 +1779,27 @@ def trich_xuat_noi_dung_bai_bao(url, title="", description=""):
                         paragraphs.append(text)
         except Exception:
             pass
-            
+
+    # Nếu không crawl được và có Gemini AI, gọi Gemini AI phân tích và viết bài báo chi tiết
+    if not paragraphs and GEMINI_API_KEY:
+        ai_prompt = (
+            f"Bạn là phóng viên kỳ cựu của Báo Tiền Phong.\n"
+            f"Hãy viết bài báo chi tiết, toàn diện, đúng bản chất sự kiện dựa trên thông tin sau:\n"
+            f"- Tiêu đề: {title}\n"
+            f"- Tóm tắt: {description}\n"
+            f"Yêu cầu:\n"
+            f"1. Viết đúng 4 đoạn văn báo chí chuyên nghiệp, không viết tiêu đề phụ hay gạch đầu dòng.\n"
+            f"2. Mỗi đoạn có độ dài từ 60-120 chữ, phân tích bối cảnh, diễn biến, phản ứng cơ quan chức năng, và khuyến cáo an toàn cho người dân."
+        )
+        try:
+            success, ai_text = goi_gemini_api(ai_prompt)
+            if success and ai_text:
+                ai_paras = [p.strip() for p in ai_text.split('\n') if len(p.strip()) > 40]
+                if len(ai_paras) >= 2:
+                    paragraphs = ai_paras
+        except Exception:
+            pass
+
     # Dự phòng nội dung bài báo chuẩn phong cách báo điện tử Tiền Phong khi không thể crawl
     if not paragraphs:
         base_desc = description.strip() if description else title
