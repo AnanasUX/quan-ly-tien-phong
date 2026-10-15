@@ -2179,6 +2179,7 @@ def api_tts_synthesize():
             "voice_info": res.get("voice_info"),
             "speed": res["speed"],
             "engine": res["engine"],
+            "paragraphs_count": res.get("paragraphs_count", 1),
             "cached": res.get("cached", False)
         }
         response = jsonify(payload)

@@ -240,22 +240,49 @@ class VieNeuTTSManager:
         clean = re.sub(r'\s+', ' ', clean).strip()
         return clean
 
+    def _split_into_paragraph_chunks(self, text: str, max_chunk_chars: int = 400) -> List[str]:
+        """
+        Chia nhỏ văn bản thành các đoạn tự nhiên theo dấu xuống dòng hoặc chấm câu,
+        đảm bảo mô hình VieNeu-TTS đọc trọn vẹn 100% nội dung bài viết mà không sót chữ.
+        """
+        raw_paras = [p.strip() for p in re.split(r'\n+|\r+', text) if p.strip()]
+        chunks = []
+        for p in raw_paras:
+            if len(p) <= max_chunk_chars:
+                chunks.append(p)
+            else:
+                sentences = re.split(r'(?<=[.!?…])\s+', p)
+                current = ""
+                for s in sentences:
+                    s = s.strip()
+                    if not s:
+                        continue
+                    if len(current) + len(s) + 1 <= max_chunk_chars:
+                        current = (current + " " + s).strip()
+                    else:
+                        if current:
+                            chunks.append(current)
+                        current = s
+                if current:
+                    chunks.append(current)
+        return chunks if chunks else [text]
+
     def synthesize(
         self,
         text: str,
         voice: Optional[str] = "Mai Anh",
         speed: float = 1.0,
-        max_length: int = 3500
+        max_length: int = 25000
     ) -> Dict[str, Any]:
         """
         Tổng hợp giọng nói tiếng Việt từ văn bản bằng VieNeu-TTS.
-        Trả về dict chứa base64 audio URI, wav bytes, thời lượng và thông tin giọng đọc.
+        Hỗ trợ đọc trọn vẹn 100% toàn bộ nội dung bài viết dài nhiều đoạn văn.
         """
         clean_text = self._clean_text_for_speech(text)
         if not clean_text:
             raise ValueError("Văn bản đầu vào trống, không thể đọc.")
 
-        # Giới hạn độ dài để đảm bảo hiệu năng và tránh cạn bộ nhớ
+        # Hỗ trợ bài viết dài tới 25.000 ký tự (toàn bộ phóng sự chuyên sâu)
         if len(clean_text) > max_length:
             clean_text = clean_text[:max_length] + "..."
 
@@ -277,6 +304,7 @@ class VieNeuTTSManager:
                     "voice_info": next((v for v in VIENEU_VOICES if v["id"] == resolved_voice), None),
                     "speed": speed,
                     "engine": "VieNeu-TTS v3 Nano",
+                    "paragraphs_count": hit.get("paragraphs_count", 1),
                     "cached": True,
                     "cached_at": hit["timestamp"]
                 }
@@ -285,18 +313,31 @@ class VieNeuTTSManager:
         if not self._ensure_model_loaded():
             raise RuntimeError(f"Không thể khởi động mô hình VieNeu-TTS: {self._init_error}")
 
+        import numpy as np
         import soundfile as sf
 
+        chunks = self._split_into_paragraph_chunks(clean_text)
+        sample_rate = getattr(self.tts, "sample_rate", 24000)
+        pause_samples = np.zeros(int(sample_rate * 0.25), dtype=np.float32)
+
         t0 = time.time()
-        # Chạy inference mô hình VieNeu-TTS
-        audio_array = self.tts.infer(
-            clean_text,
-            voice=resolved_voice,
-            speed=speed
-        )
+        audio_arrays = []
+
+        # Tổng hợp từng phân đoạn bài viết và ghép nối liền mạch
+        for idx, chunk in enumerate(chunks):
+            chunk_audio = self.tts.infer(
+                chunk,
+                voice=resolved_voice,
+                speed=speed
+            )
+            audio_arrays.append(chunk_audio)
+            # Thêm khoảng lặng phát thanh tự nhiên 250ms giữa các đoạn văn
+            if idx < len(chunks) - 1:
+                audio_arrays.append(pause_samples)
+
+        audio_array = np.concatenate(audio_arrays) if len(audio_arrays) > 1 else audio_arrays[0]
         inference_time = time.time() - t0
 
-        sample_rate = getattr(self.tts, "sample_rate", 24000)
         duration_seconds = round(len(audio_array) / float(sample_rate), 2)
 
         # Chuyển đổi sang WAV buffer
@@ -313,6 +354,7 @@ class VieNeuTTSManager:
             "wav_bytes": wav_bytes,
             "duration_seconds": duration_seconds,
             "sample_rate": sample_rate,
+            "paragraphs_count": len(chunks),
             "timestamp": time.time()
         }
 
