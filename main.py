@@ -1017,6 +1017,113 @@ def format_weather(trang_thai, ht, ten_vi_tri, c_temp, feels_like, humidity, pm2
 video_cache_data = {"timestamp": 0, "videos": []}
 video_cache_lock = threading.Lock()
 
+FALLBACK_VIDEOS = [
+    {
+        "id": "iVF4Jr-xoWk",
+        "title": "Đường đi biến thành nơi tập kết rác tại Lạc Đạo, Hưng Yên",
+        "link": "https://www.youtube.com/watch?v=iVF4Jr-xoWk",
+        "embed_url": "https://www.youtube-nocookie.com/embed/iVF4Jr-xoWk",
+        "thumbnail": "https://img.youtube.com/vi/iVF4Jr-xoWk/hqdefault.jpg",
+        "channel": "VTV24",
+        "category": "traffic",
+        "category_label": "Giao thông & Đô thị",
+        "badge": "MỚI NHẤT",
+        "published": "Vừa phát sóng",
+        "published_iso": "2026-10-15T08:00:00+00:00"
+    },
+    {
+        "id": "PQlBET-bx80",
+        "title": "Phóng sự điều tra: Tinh vi thủ đoạn rửa tiền hàng nghìn tỷ đồng xuyên biên giới",
+        "link": "https://www.youtube.com/watch?v=PQlBET-bx80",
+        "embed_url": "https://www.youtube-nocookie.com/embed/PQlBET-bx80",
+        "thumbnail": "https://img.youtube.com/vi/PQlBET-bx80/hqdefault.jpg",
+        "channel": "VTV24",
+        "category": "news",
+        "category_label": "Tiêu điểm 24h",
+        "badge": "ĐIỀU TRA",
+        "published": "Vừa phát sóng",
+        "published_iso": "2026-10-15T07:30:00+00:00"
+    },
+    {
+        "id": "Q8gNSlAYBak",
+        "title": "Trực tiếp sự kiện: Lễ trao giải Thương Hiệu Vàng TP.HCM 2026 - Động lực tăng trưởng",
+        "link": "https://www.youtube.com/watch?v=Q8gNSlAYBak",
+        "embed_url": "https://www.youtube-nocookie.com/embed/Q8gNSlAYBak",
+        "thumbnail": "https://img.youtube.com/vi/Q8gNSlAYBak/hqdefault.jpg",
+        "channel": "Báo Tuổi Trẻ",
+        "category": "life",
+        "category_label": "Đời sống & Xã hội",
+        "badge": "TRỰC TIẾP",
+        "published": "Vừa phát sóng",
+        "published_iso": "2026-10-15T07:00:00+00:00"
+    },
+    {
+        "id": "6bfwopT5zUA",
+        "title": "Chiến dịch 500 ngày đêm: Hành trình trở về sau gần 60 năm",
+        "link": "https://www.youtube.com/watch?v=6bfwopT5zUA",
+        "embed_url": "https://www.youtube-nocookie.com/embed/6bfwopT5zUA",
+        "thumbnail": "https://img.youtube.com/vi/6bfwopT5zUA/hqdefault.jpg",
+        "channel": "VTV24",
+        "category": "news",
+        "category_label": "Tiêu điểm 24h",
+        "badge": "PHÓNG SỰ",
+        "published": "Vừa phát sóng",
+        "published_iso": "2026-10-15T06:00:00+00:00"
+    },
+    {
+        "id": "BywNaNPfvik",
+        "title": "Thời sự toàn cảnh: Việt Nam tăng cường hợp tác và phát triển kinh tế xã hội",
+        "link": "https://www.youtube.com/watch?v=BywNaNPfvik",
+        "embed_url": "https://www.youtube-nocookie.com/embed/BywNaNPfvik",
+        "thumbnail": "https://img.youtube.com/vi/BywNaNPfvik/hqdefault.jpg",
+        "channel": "VTV24",
+        "category": "news",
+        "category_label": "Tiêu điểm 24h",
+        "badge": "TIÊU ĐIỂM",
+        "published": "1 giờ trước",
+        "published_iso": "2026-10-15T05:00:00+00:00"
+    },
+    {
+        "id": "wT7fGqh0e24",
+        "title": "Nóng nghị trường Quốc Hội: Phim ‘rác’ AI hủy hoại giới trẻ, liều thuốc độc thời đại mới",
+        "link": "https://www.youtube.com/watch?v=wT7fGqh0e24",
+        "embed_url": "https://www.youtube-nocookie.com/embed/wT7fGqh0e24",
+        "thumbnail": "https://img.youtube.com/vi/wT7fGqh0e24/hqdefault.jpg",
+        "channel": "Báo Tiền Phong",
+        "category": "news",
+        "category_label": "Tiêu điểm 24h",
+        "badge": "NGHỊ TRƯỜNG",
+        "published": "2 giờ trước",
+        "published_iso": "2026-10-15T04:00:00+00:00"
+    },
+    {
+        "id": "byik3EPK-NQ",
+        "title": "Mặt đường bất ngờ nứt vỡ 'nuốt chửng’ 15 ô tô, 'hố tử thần’ xuất hiện khiến dân bàng hoàng",
+        "link": "https://www.youtube.com/watch?v=byik3EPK-NQ",
+        "embed_url": "https://www.youtube-nocookie.com/embed/byik3EPK-NQ",
+        "thumbnail": "https://img.youtube.com/vi/byik3EPK-NQ/hqdefault.jpg",
+        "channel": "Báo Tiền Phong",
+        "category": "warning",
+        "category_label": "Cảnh báo khẩn",
+        "badge": "CẢNH BÁO",
+        "published": "3 giờ trước",
+        "published_iso": "2026-10-15T03:00:00+00:00"
+    },
+    {
+        "id": "7Lz5mP1o2aQ",
+        "title": "Dự báo thời tiết 24h tới: Không khí lạnh tăng cường, Bắc Bộ chuyển mưa rải rác",
+        "link": "https://www.youtube.com/watch?v=7Lz5mP1o2aQ",
+        "embed_url": "https://www.youtube-nocookie.com/embed/7Lz5mP1o2aQ",
+        "thumbnail": "https://img.youtube.com/vi/7Lz5mP1o2aQ/hqdefault.jpg",
+        "channel": "VTV24",
+        "category": "weather",
+        "category_label": "Thời tiết & Bão lũ",
+        "badge": "THỜI TIẾT",
+        "published": "4 giờ trước",
+        "published_iso": "2026-10-15T02:00:00+00:00"
+    }
+]
+
 def lay_danh_sach_video_da_dang(so_luong=10, trang_thai="BINH_THUONG"):
     """
     Thu thập CHỈ VIDEO DÀI (Bỏ qua hoàn toàn YouTube Shorts, Reels, video ngắn).
@@ -1159,6 +1266,8 @@ def lay_danh_sach_video_da_dang(so_luong=10, trang_thai="BINH_THUONG"):
             video_cache_data["timestamp"] = now_ts
 
     result = all_vids if all_vids else video_cache_data.get("videos", [])
+    if not result:
+        result = list(FALLBACK_VIDEOS)
     if trang_thai in ["MUA_NHO", "MUA_DONG", "MUA_BAO", "NANG_GAT"]:
         result = sorted(result, key=lambda x: 0 if x.get("category") in ["weather", "warning"] else 1)
     return result[:so_luong]
