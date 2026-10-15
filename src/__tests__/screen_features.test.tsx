@@ -631,6 +631,35 @@ describe('Màn hình 4 & 5: Tin tức và Giao diện Responsive (SCR-NEWS-04 & 
     expect(tabAll.className).toContain('bg-[#ff315f]');
   });
 
+  it('F-NEW-06: Chuyển đổi bộ engine VieNeu-TTS AI (Siêu thực) và danh sách nhân vật phát thanh', () => {
+    const testArticle = mockData.news[0];
+    render(
+      <ArticleDetailModal
+        article={testArticle}
+        onClose={vi.fn()}
+      />
+    );
+
+    // Kiểm tra các tùy chọn động cơ
+    expect(screen.getByText(/🦜 VieNeu-TTS AI \(Siêu thực\)/i)).toBeDefined();
+    const btnWebSpeech = screen.getByText(/🎙️ Web Speech \(Trình duyệt\)/i);
+    expect(btnWebSpeech).toBeDefined();
+
+    // Chuyển sang Web Speech
+    fireEvent.click(btnWebSpeech);
+    expect(btnWebSpeech.className).toContain('bg-indigo-600');
+
+    // Chuyển lại VieNeu-TTS AI
+    const btnVieNeu = screen.getByText(/🦜 VieNeu-TTS AI \(Siêu thực\)/i);
+    fireEvent.click(btnVieNeu);
+    expect(btnVieNeu.className).toContain('bg-indigo-600');
+
+    // Kiểm tra danh sách giọng đọc phát thanh
+    expect(screen.getByText(/Giọng phát thanh:/i)).toBeDefined();
+    expect(screen.getByText(/ONNX 24kHz/i)).toBeDefined();
+    expect(screen.getByText(/Mai Anh \(Nữ · Miền Bắc\) - Thời sự Tiền Phong/i)).toBeDefined();
+  });
+
   it('F-LAY-03: BrandLogo nhận diện thương hiệu chuẩn xác và bộ lọc tìm kiếm tin tức tức thời', () => {
     // 1. BrandLogo
     render(<BrandLogo />);
