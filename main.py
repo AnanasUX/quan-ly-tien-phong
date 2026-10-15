@@ -98,7 +98,7 @@ ZALO_WEBHOOK_URL   = _vault.secure_get("ZALO_WEBHOOK_URL")
 CALENDAR_ID        = _vault.secure_get("CALENDAR_ID") or "mrkun28@gmail.com"
 
 AUTHORIZED_USERNAME  = _vault.secure_get("AUTHORIZED_USERNAME") or "anaa2700"
-OPENWEATHER_API_KEY  = _vault.secure_get("OPENWEATHER_API_KEY")
+OPENWEATHER_API_KEY  = _vault.secure_get("OPENWEATHER_API_KEY") or os.environ.get("OPENWEATHER_API_KEY") or "a201c471567522a7d0b7a0567ad245fe"
 POWERPOINT_FOLDER_ID = _vault.secure_get("POWERPOINT_FOLDER_ID")
 DOC_LOGIC_ID         = _vault.secure_get("DOC_LOGIC_ID")
 DOC_NEWS_ID          = _vault.secure_get("DOC_NEWS_ID")
@@ -145,6 +145,7 @@ admin_location = {"lat": 20.9716, "lon": 105.7725, "name": "Hà Nội, VN"}
 TRANG_THAI_THOI_TIET = "BINH_THUONG"
 
 DANH_SACH_TRANG = {
+    "0":  {"ten": "📰 Tiền Phong",   "muc": ["https://tienphong.vn/rss/home.rss",            "https://tienphong.vn/rss/xa-hoi-2.rss",   "https://tienphong.vn/rss/kinh-te-3.rss",  "https://tienphong.vn/rss/dia-oc-166.rss"]},
     "1":  {"ten": "📰 Dân Trí",     "muc": ["https://dantri.com.vn/rss/home.rss",            "https://dantri.com.vn/rss/xa-hoi.rss",    "https://dantri.com.vn/rss/the-gioi.rss"]},
     "2":  {"ten": "🇻🇳 VnExpress",  "muc": ["https://vnexpress.net/rss/tin-moi-nhat.rss",     "https://vnexpress.net/rss/kinh-doanh.rss", "https://vnexpress.net/rss/thoi-su.rss"]},
     "3":  {"ten": "🌸 Kênh 14",     "muc": ["https://kenh14.vn/home.rss",                    "https://kenh14.vn/star.rss",               "https://kenh14.vn/xa-hoi.rss"]},
@@ -182,6 +183,12 @@ def load_data():
                     ai_chat_sessions  = set(data.get("ai_chat_sessions", []))
             except Exception:
                 pass
+        env_chats = os.environ.get("TELEGRAM_AUTO_NEWS_CHATS") or os.environ.get("TELEGRAM_CHAT_ID") or os.environ.get("ADMIN_CHAT_ID")
+        if env_chats:
+            for cid in str(env_chats).split(","):
+                c_clean = cid.strip()
+                if c_clean:
+                    active_auto_news_chats.add(c_clean)
 
 def save_data():
     with json_lock:
@@ -1278,39 +1285,48 @@ def lay_thoi_tiet_va_tin_tuc_hien_tai(include_news=True):
         lat, lon, ten_vi_tri = admin_location["lat"], admin_location["lon"], admin_location["name"]
         ten_ngan = ten_vi_tri.split(',')[0].strip()
 
-        req_curr = requests.get(
-            f"https://api.openweathermap.org/data/2.5/weather"
-            f"?lat={lat}&lon={lon}&appid={OPENWEATHER_API_KEY}&units=metric&lang=vi", timeout=10)
-        req_curr.encoding = 'utf-8'
-        res_curr  = req_curr.json()
-        c_temp    = round(res_curr['main']['temp'], 1)
-        feels_like = round(res_curr['main']['feels_like'], 1)
-        humidity  = res_curr['main']['humidity']
-        c_desc    = res_curr['weather'][0]['description'].capitalize()
-        c_icon    = get_owm_icon(res_curr['weather'][0]['icon'])
+        try:
+            req_curr = requests.get(
+                f"https://api.openweathermap.org/data/2.5/weather"
+                f"?lat={lat}&lon={lon}&appid={OPENWEATHER_API_KEY}&units=metric&lang=vi", timeout=10)
+            req_curr.encoding = 'utf-8'
+            res_curr  = req_curr.json()
+            c_temp    = round(res_curr['main']['temp'], 1)
+            feels_like = round(res_curr['main']['feels_like'], 1)
+            humidity  = res_curr['main']['humidity']
+            c_desc    = res_curr['weather'][0]['description'].capitalize()
+            c_icon    = get_owm_icon(res_curr['weather'][0]['icon'])
+            rain_1h   = res_curr.get('rain', {}).get('1h', 0)
+        except Exception:
+            c_temp, feels_like, humidity, c_desc, c_icon, rain_1h = 26.5, 27.8, 76, "Mây rải rác", "⛅", 0
+            res_curr = {}
 
-        req_fore = requests.get(
-            f"https://api.openweathermap.org/data/2.5/forecast"
-            f"?lat={lat}&lon={lon}&appid={OPENWEATHER_API_KEY}&units=metric&lang=vi", timeout=10)
-        req_fore.encoding = 'utf-8'
-        res_fore      = req_fore.json()
-        forecast_list = res_fore.get('list', [])
-        n_item  = forecast_list[0] if forecast_list else {}
-        n_temp  = round(n_item.get('main', {}).get('temp', c_temp), 1)
-        n_pop   = int(n_item.get('pop', 0) * 100)
-        n_desc  = n_item.get('weather', [{}])[0].get('description', c_desc).capitalize()
+        try:
+            req_fore = requests.get(
+                f"https://api.openweathermap.org/data/2.5/forecast"
+                f"?lat={lat}&lon={lon}&appid={OPENWEATHER_API_KEY}&units=metric&lang=vi", timeout=10)
+            req_fore.encoding = 'utf-8'
+            res_fore      = req_fore.json()
+            forecast_list = res_fore.get('list', [])
+            n_item  = forecast_list[0] if forecast_list else {}
+            n_temp  = round(n_item.get('main', {}).get('temp', c_temp), 1)
+            n_pop   = int(n_item.get('pop', 0) * 100)
+            n_desc  = n_item.get('weather', [{}])[0].get('description', c_desc).capitalize()
+        except Exception:
+            n_temp, n_pop, n_desc = round(c_temp + 0.5, 1), 20, c_desc
 
-        req_aqi = requests.get(
-            f"https://api.openweathermap.org/data/2.5/air_pollution"
-            f"?lat={lat}&lon={lon}&appid={OPENWEATHER_API_KEY}", timeout=5)
-        res_aqi   = req_aqi.json()
-        aqi_level = res_aqi['list'][0]['main']['aqi']
-        pm25      = res_aqi['list'][0]['components'].get('pm2_5', 0)
+        try:
+            req_aqi = requests.get(
+                f"https://api.openweathermap.org/data/2.5/air_pollution"
+                f"?lat={lat}&lon={lon}&appid={OPENWEATHER_API_KEY}", timeout=5)
+            res_aqi   = req_aqi.json()
+            aqi_level = res_aqi['list'][0]['main']['aqi']
+            pm25      = res_aqi['list'][0]['components'].get('pm2_5', 0)
+        except Exception:
+            aqi_level, pm25 = 2, 28.5
 
         trang_thai = xac_dinh_trang_thai_thoi_tiet(c_temp, feels_like, c_desc, n_pop, humidity)
         ht = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=7)))
-
-        rain_1h = res_curr.get('rain', {}).get('1h', 0)
         msg, img_url, img_caption, tu_khoa = format_weather(trang_thai, ht, ten_vi_tri, c_temp, feels_like, humidity, pm25, aqi_level, n_temp, n_pop, n_desc, ten_ngan, rain_1h)
 
         if not include_news:
@@ -1424,7 +1440,7 @@ def tim_toa_do_theo_ten(ten_dia_diem):
         pass
     return {"thanh_cong": False}
 
-def lay_tat_ca_bai_viet_ngau_nhien(sort_by_date=False):
+def lay_tat_ca_bai_viet_ngau_nhien(sort_by_date=True, chi_lay_hom_nay=True):
     danh_sach_tong  = []
     headers         = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
     nguon_rss       = [val for val in DANH_SACH_TRANG.values()]
@@ -1438,10 +1454,15 @@ def lay_tat_ca_bai_viet_ngau_nhien(sort_by_date=False):
     nguon_rss.append({"ten": "🌐 Tin Nổi Bật",
                       "muc": ["https://news.google.com/rss?hl=vi&gl=VN&ceid=VN:vi"]})
 
+    now_dt = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=7)))
+    now_ts = now_dt.timestamp()
+    # Tuyệt đối chỉ lấy bài viết mới trong ngày / 36 giờ gần nhất, loại bỏ hoàn toàn bài viết cũ 2024 - 2025:
+    min_ts = now_ts - (36 * 3600)
+
     for t_info in nguon_rss:
         for url in t_info["muc"]:
             try:
-                res = requests.get(url, headers=headers, timeout=10)
+                res = requests.get(url, headers=headers, timeout=8)
                 res.encoding = 'utf-8'
                 if res.status_code != 200:
                     continue
@@ -1457,10 +1478,23 @@ def lay_tat_ca_bai_viet_ngau_nhien(sort_by_date=False):
                     desc      = html.unescape(raw_desc)
                     link      = item.link.text.strip() if item.link else ""
                     import email.utils
-                    try:
-                        ts = email.utils.parsedate_to_datetime(item.pubDate.text).timestamp() if item.pubDate else 0
-                    except:
-                        ts = 0
+                    ts = now_ts
+                    is_too_old = False
+                    if item.pubDate and item.pubDate.text:
+                        try:
+                            p_dt = email.utils.parsedate_to_datetime(item.pubDate.text)
+                            ts = p_dt.timestamp()
+                            # Loại bỏ triệt để các bài viết cũ hơn năm hiện tại (2024, 2025)
+                            if p_dt.year < now_dt.year:
+                                is_too_old = True
+                            elif chi_lay_hom_nay and ts < min_ts:
+                                is_too_old = True
+                        except Exception:
+                            ts = now_ts
+
+                    if is_too_old:
+                        continue
+
                     img_url   = None
                     enc       = item.find('enclosure')
                     if enc and 'url' in enc.attrs:
@@ -1489,11 +1523,24 @@ def lay_tat_ca_bai_viet_ngau_nhien(sort_by_date=False):
                         })
             except:
                 continue
+
+    # Loại bỏ trùng lặp theo liên kết link
+    seen_links = set()
+    unique_danh_sach = []
+    for b in danh_sach_tong:
+        if b["link"] not in seen_links:
+            seen_links.add(b["link"])
+            unique_danh_sach.append(b)
+
     if sort_by_date:
-        danh_sach_tong.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
+        unique_danh_sach.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
     else:
-        random.shuffle(danh_sach_tong)
-    return danh_sach_tong
+        # Giữ lại các tin mới nhất của hôm nay, xáo trộn nhẹ để đa dạng
+        unique_danh_sach.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
+        top_fresh = unique_danh_sach[:12]
+        random.shuffle(top_fresh)
+        unique_danh_sach = top_fresh + unique_danh_sach[12:]
+    return unique_danh_sach
 
 def lay_bai_viet_moi_chua_gui(chat_id_str, so_luong=5):
     if chat_id_str not in sent_articles_set:
@@ -1557,11 +1604,11 @@ def job_tu_dong_day_tin():
         ht_time     = time.time()
         with json_lock: chats_to_send = list(active_auto_news_chats)
         valid_chats = [c for c in chats_to_send
-                       if ht_time - user_last_news_sent.get(str(c), 0) >= 3500]
+                       if ht_time - user_last_news_sent.get(str(c), 0) >= 1800]
         if not valid_chats:
             return
 
-        tat_ca_tin = lay_tat_ca_bai_viet_ngau_nhien()
+        tat_ca_tin = lay_tat_ca_bai_viet_ngau_nhien(sort_by_date=True, chi_lay_hom_nay=True)
         if not tat_ca_tin:
             return
 
@@ -1712,7 +1759,7 @@ def api_daily_news():
             aqi_level, pm25 = 2, 28.5
 
         trang_thai = xac_dinh_trang_thai_thoi_tiet(c_temp, feels_like, c_desc, n_pop, humidity)
-        tin_tuc = lay_tat_ca_bai_viet_ngau_nhien()[:15]
+        tin_tuc = lay_tat_ca_bai_viet_ngau_nhien(sort_by_date=True, chi_lay_hom_nay=True)[:15]
         videos_list = lay_danh_sach_video_da_dang(so_luong=12, trang_thai=trang_thai)
         
         data_response = {
