@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { VisualTestRunner } from "./VisualTestRunner";
 
 const assetPathPrefix = "/assets";
@@ -616,183 +616,8 @@ export function VideoModal({ video, onClose }: { video: VideoItem | null; onClos
 }
 
 // ── Interactive Article Detail Modal (Đọc bài viết chi tiết & Tóm tắt AI) ─
+export { ArticleDetailModal } from "./ArticleDetailModal";
 
-export function ArticleDetailModal({
-  article,
-  onClose,
-  onOpenCopilotWithContext,
-}: {
-  article: NewsArticle | null;
-  onClose: () => void;
-  onOpenCopilotWithContext?: (prompt: string) => void;
-}) {
-  const [copied, setCopied] = useState(false);
-
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-    if (article) {
-      document.body.style.overflow = "hidden";
-      window.addEventListener("keydown", handleKeyDown);
-    }
-    return () => {
-      document.body.style.overflow = "auto";
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [article, onClose]);
-
-  if (!article) return null;
-
-  const handleCopyLink = () => {
-    if (article.link && article.link !== "#") {
-      navigator.clipboard?.writeText?.(article.link);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
-
-  const handleAskCopilot = () => {
-    if (onOpenCopilotWithContext) {
-      onOpenCopilotWithContext(`Phân tích ý nghĩa và tác động của bài viết: "${article.title}"`);
-    }
-    onClose();
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 md:p-8 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="relative w-full max-w-3xl max-h-[90vh] bg-white rounded-3xl overflow-hidden shadow-2xl flex flex-col border border-[#e3e7ef]">
-        {/* Modal Header */}
-        <div className="flex items-center justify-between px-6 py-4 bg-white border-b border-[#e3e7ef] shrink-0">
-          <div className="flex items-center gap-2.5">
-            <span className="bg-[#ffe8ee] text-[#ff315f] text-[11px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider">
-              {article.source || "Báo Tiền Phong"}
-            </span>
-            <span className="text-[12px] text-[#5f687b] flex items-center gap-1.5">
-              <img src={imgClock} alt="time" className="size-3.5 opacity-60 inline" />
-              <span>Vừa cập nhật · 2 phút đọc</span>
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleCopyLink}
-              title="Sao chép liên kết"
-              className="px-3 py-1.5 rounded-full bg-[#f4f6fa] hover:bg-[#e9ecf2] text-[#5f687b] text-[12px] font-medium transition-colors flex items-center gap-1 cursor-pointer"
-            >
-              {copied ? "✓ Đã sao chép" : "🔗 Sao chép"}
-            </button>
-            <button
-              onClick={onClose}
-              data-testid="close-article-modal"
-              aria-label="Đóng chi tiết bài viết"
-              className="size-8 rounded-full bg-[#f4f6fa] hover:bg-[#e3e7ef] text-[#182033] flex items-center justify-center text-[16px] font-bold transition-colors cursor-pointer"
-            >
-              ✕
-            </button>
-          </div>
-        </div>
-
-        {/* Modal Body (Scrollable) */}
-        <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-6">
-          {/* Article Title */}
-          <h2 className="font-['Inter:Bold'] font-extrabold text-[#182033] text-[22px] md:text-[26px] leading-snug tracking-tight">
-            {article.title}
-          </h2>
-
-          {/* Article Image Banner */}
-          {article.image && (
-            <div className="relative rounded-2xl overflow-hidden w-full max-h-[360px] bg-[#f4f6fa] border border-[#e3e7ef]">
-              <img
-                src={article.image}
-                alt={article.title}
-                onError={(e) => {
-                  e.currentTarget.onerror = null;
-                  e.currentTarget.src = FALLBACK_NEWS_IMAGES[0];
-                }}
-                className="w-full h-full object-cover max-h-[360px]"
-              />
-              <div className="absolute bottom-2 right-3 bg-black/60 backdrop-blur-sm text-white/90 text-[11px] px-2.5 py-0.5 rounded-md">
-                Nguồn: {article.source || "Ảnh báo chí"}
-              </div>
-            </div>
-          )}
-
-          {/* Copilot AI Smart Summary Card */}
-          <div className="bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 border border-indigo-200/70 rounded-2xl p-5 shadow-xs">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <span className="text-[18px]">🤖</span>
-                <span className="font-['Inter:Bold'] font-bold text-indigo-950 text-[13px] uppercase tracking-wide">
-                  Tóm Tắt Nhanh Bởi Antigravity Copilot
-                </span>
-              </div>
-              <span className="bg-indigo-600/10 text-indigo-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                AI INSIGHT
-              </span>
-            </div>
-
-            <div className="space-y-2 text-[13px] text-indigo-950/80 leading-relaxed">
-              <p className="flex items-start gap-2">
-                <span className="text-indigo-600 font-bold">•</span>
-                <span><strong>Trọng tâm sự kiện:</strong> {article.description || article.title}</span>
-              </p>
-              <p className="flex items-start gap-2">
-                <span className="text-indigo-600 font-bold">•</span>
-                <span><strong>Tác động đô thị:</strong> Thông tin có ý nghĩa lớn đối với an toàn sinh hoạt, lộ trình giao thông và sự chủ động của người dân Thủ đô.</span>
-              </p>
-              <p className="flex items-start gap-2">
-                <span className="text-indigo-600 font-bold">•</span>
-                <span><strong>Khuyến nghị từ AI:</strong> Bạn có thể theo dõi thêm diễn biến trên các phương tiện truyền thông chính thống hoặc hỏi trực tiếp Copilot để cập nhật chi tiết.</span>
-              </p>
-            </div>
-          </div>
-
-          {/* Full description / content */}
-          <div className="space-y-4 text-[#334155] leading-relaxed text-[15px]">
-            <p className="font-semibold text-[#1e293b] text-[16px] leading-relaxed">
-              {article.description}
-            </p>
-            <p className="text-[#475569]">
-              Bài viết được đăng tải chính thức bởi <strong>{article.source || "Tòa soạn"}</strong>. Để bảo đảm tính chính xác và đầy đủ nhất của toàn văn bài viết, video phóng sự và tư liệu liên quan, bạn đọc có thể truy cập trực tiếp bài báo gốc thông qua nút chuyển hướng phía dưới.
-            </p>
-          </div>
-        </div>
-
-        {/* Modal Footer Actions */}
-        <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 bg-[#f8fafc] border-t border-[#e3e7ef] shrink-0">
-          <button
-            onClick={handleAskCopilot}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 via-indigo-600 to-rose-500 hover:opacity-95 text-white font-['Inter:Semi_Bold'] font-semibold text-[13px] shadow-sm transition-all cursor-pointer"
-          >
-            <span>🤖 Hỏi Copilot về bài này</span>
-            <span>→</span>
-          </button>
-
-          <div className="flex items-center gap-2">
-            {article.link && article.link !== "#" && (
-              <a
-                href={article.link}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#182033] hover:bg-[#25324d] text-white font-['Inter:Semi_Bold'] font-semibold text-[13px] transition-all no-underline shadow-sm"
-              >
-                <span>Đọc bài gốc trên {article.source || "báo"}</span>
-                <span>↗</span>
-              </a>
-            )}
-            <button
-              onClick={onClose}
-              className="px-4 py-2.5 rounded-xl bg-white border border-[#e3e7ef] hover:bg-[#f1f5f9] text-[#5f687b] font-medium text-[13px] transition-colors cursor-pointer"
-            >
-              Đóng
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ── Antigravity Copilot Client & Fallback Engine ──────────────────────────
 
@@ -1885,15 +1710,42 @@ export function DesktopLayout({
   onSearchChange?: (q: string) => void;
   onStartVisualTest?: () => void;
 }) {
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [visibleCount, setVisibleCount] = useState<number>(5);
+
+  const categorizedNews = useMemo(() => {
+    let list = data.news;
+    if (selectedCategory === "weather") {
+      list = list.filter((n) => /mưa|bão|lũ|ngập|thời tiết|nhiệt độ|rét|nắng|áp thấp|dông/i.test(n.title + " " + n.description));
+    } else if (selectedCategory === "traffic") {
+      list = list.filter((n) => /giao thông|xe|đường|cầu|hạ tầng|cao tốc|ùn tắc/i.test(n.title + " " + n.description));
+    } else if (selectedCategory === "news") {
+      list = list.filter((n) => /thời sự|chính trị|tiêu điểm|quốc tế|kinh tế|nghị trường/i.test(n.title + " " + n.description));
+    } else if (selectedCategory === "life") {
+      list = list.filter((n) => /đời sống|xã hội|giáo dục|văn hóa|y tế|sức khỏe/i.test(n.title + " " + n.description));
+    } else if (selectedCategory === "saved") {
+      try {
+        const raw = localStorage.getItem("pulse_saved_articles");
+        if (raw) list = JSON.parse(raw);
+        else list = [];
+      } catch {
+        list = [];
+      }
+    }
+    return list;
+  }, [data.news, selectedCategory]);
+
   const displayNews = searchQuery?.trim()
-    ? data.news.filter((n) =>
+    ? categorizedNews.filter((n) =>
         (n.title + " " + n.description + " " + n.source)
           .toLowerCase()
           .includes(searchQuery.trim().toLowerCase())
       )
-    : data.news;
+    : categorizedNews;
+
   const feat = displayNews[0];
-  const grid = displayNews.slice(1, 5);
+  const grid = displayNews.slice(1, visibleCount);
+  const hasMore = displayNews.length > visibleCount;
   const now = new Date();
   const days = ["Chủ nhật", "Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7"];
   const dateStr = `${days[now.getDay()]}, ${now.getDate()} Tháng ${now.getMonth() + 1} - ${data.updateTime}`;
@@ -1976,6 +1828,34 @@ export function DesktopLayout({
             <div className="bg-white border border-[#e3e7ef] flex items-center px-3 py-[6px] rounded-full">
               <p className="font-['Inter:Regular'] font-normal text-[#5f687b] text-[12px]">Mới nhất ▾</p>
             </div>
+          </div>
+
+          {/* News Category Filter Tabs */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none w-full">
+            {[
+              { key: "all", label: `🔥 Tất cả (${data.news.length})` },
+              { key: "weather", label: "🌤️ Thời tiết & Môi trường" },
+              { key: "traffic", label: "🚗 Giao thông & Đô thị" },
+              { key: "news", label: "⚡ Thời sự & Tiêu điểm" },
+              { key: "life", label: "🌿 Đời sống" },
+              { key: "saved", label: "🔖 Bài viết đã lưu" },
+            ].map((cat) => (
+              <button
+                key={cat.key}
+                data-testid={`news-tab-${cat.key}`}
+                onClick={() => {
+                  setSelectedCategory(cat.key);
+                  setVisibleCount(5);
+                }}
+                className={`px-3.5 py-1.5 rounded-full text-[12px] font-['Inter:Semi_Bold'] font-semibold whitespace-nowrap transition-all duration-200 cursor-pointer ${
+                  selectedCategory === cat.key
+                    ? "bg-[#ff315f] text-white shadow-md shadow-[#ff315f]/25 scale-102"
+                    : "bg-white text-[#5f687b] hover:bg-[#eef2f6] border border-[#e3e7ef]"
+                }`}
+              >
+                {cat.label}
+              </button>
+            ))}
           </div>
 
           {searchQuery && (
@@ -2095,6 +1975,20 @@ export function DesktopLayout({
               </div>
             ))}
           </div>
+
+          {/* Load More Articles Button */}
+          {hasMore && (
+            <div className="flex justify-center w-full pt-1">
+              <button
+                data-testid="load-more-news-btn"
+                onClick={() => setVisibleCount((prev) => prev + 4)}
+                className="px-6 py-2.5 rounded-full bg-white border border-[#e3e7ef] hover:border-[#ff315f]/50 hover:bg-[#fff5f7] text-[#182033] hover:text-[#ff315f] font-['Inter:Semi_Bold'] font-semibold text-[13px] shadow-xs transition-all flex items-center gap-2 cursor-pointer"
+              >
+                <span>⬇️ Xem thêm bài viết</span>
+                <span className="text-[#5f687b] text-[12px]">({displayNews.length - visibleCount} bài còn lại)</span>
+              </button>
+            </div>
+          )}
 
           {/* ULTRA-STYLED VIDEO MULTIMEDIA HUB */}
           <div className="w-full pt-2">
@@ -2231,6 +2125,8 @@ export default function App() {
       <ArticleDetailModal
         article={activeArticle}
         onClose={() => setActiveArticle(null)}
+        allNews={data.news}
+        onSelectArticle={setActiveArticle}
         onOpenCopilotWithContext={(prompt) => {
           setCopilotOpen(true);
           setActiveAction("general_chat");

@@ -34,6 +34,32 @@ import { VisualTestRunner } from '../VisualTestRunner';
 beforeAll(() => {
   // Mock scrollIntoView cho môi trường jsdom
   window.HTMLElement.prototype.scrollIntoView = vi.fn();
+
+  // Mock SpeechSynthesis cho tính năng đọc báo AI TTS
+  const mockSpeechSynthesis = {
+    speak: vi.fn(),
+    cancel: vi.fn(),
+    pause: vi.fn(),
+    resume: vi.fn(),
+    speaking: false,
+  };
+  Object.defineProperty(window, 'speechSynthesis', {
+    value: mockSpeechSynthesis,
+    writable: true,
+  });
+
+  class MockSpeechSynthesisUtterance {
+    text: string;
+    lang = '';
+    rate = 1;
+    onend: (() => void) | null = null;
+    onerror: (() => void) | null = null;
+    constructor(text: string) {
+      this.text = text;
+    }
+  }
+  (window as any).SpeechSynthesisUtterance = MockSpeechSynthesisUtterance;
+  (globalThis as any).SpeechSynthesisUtterance = MockSpeechSynthesisUtterance;
 });
 
 afterEach(() => {
@@ -429,6 +455,180 @@ describe('Màn hình 4 & 5: Tin tức và Giao diện Responsive (SCR-NEWS-04 & 
     fireEvent.click(btnAskCopilot);
     expect(onCopilotPromptMock).toHaveBeenCalled();
     expect(onCloseMock).toHaveBeenCalled();
+  });
+
+  it('F-NEW-02: Đọc báo thông minh AI Voice TTS (bật/tắt giọng nói vi-VN, chỉnh tốc độ đọc, tự dừng khi thoát)', () => {
+    const onCloseMock = vi.fn();
+    const testArticle = mockData.news[0];
+
+    render(
+      <ArticleDetailModal
+        article={testArticle}
+        onClose={onCloseMock}
+      />
+    );
+
+    const btnTTS = screen.getByTestId('tts-toggle-btn');
+    expect(btnTTS).toBeDefined();
+    expect(btnTTS.textContent).toContain('Nghe đọc báo AI');
+
+    // Bật đọc báo
+    fireEvent.click(btnTTS);
+    expect(window.speechSynthesis.speak).toHaveBeenCalled();
+    expect(screen.getByText(/Tạm dừng đọc/i)).toBeDefined();
+    expect(screen.getByText(/Đang phát/i)).toBeDefined();
+
+    // Điều chỉnh tốc độ 1.25x
+    const btnRate125 = screen.getByText('1.25x');
+    expect(btnRate125).toBeDefined();
+    fireEvent.click(btnRate125);
+
+    // Tắt đọc báo bằng nút tạm dừng
+    fireEvent.click(btnTTS);
+    expect(window.speechSynthesis.cancel).toHaveBeenCalled();
+    expect(screen.getByText(/Nghe đọc báo AI/i)).toBeDefined();
+
+    // Đóng modal tự động ngắt âm thanh
+    const btnClose = screen.getByTestId('close-article-modal');
+    fireEvent.click(btnClose);
+    expect(window.speechSynthesis.cancel).toHaveBeenCalled();
+    expect(onCloseMock).toHaveBeenCalled();
+  });
+
+  it('F-NEW-03: Tùy biến trải nghiệm đọc trực quan: Cỡ chữ đa cấp (sm, base, lg, xl) và 3 chế độ nền đọc', () => {
+    const testArticle = mockData.news[0];
+
+    render(
+      <ArticleDetailModal
+        article={testArticle}
+        onClose={vi.fn()}
+      />
+    );
+
+    // Kiểm tra các nút cỡ chữ
+    const btnAminus = screen.getByTitle('Cỡ chữ sm');
+    const btnAplus = screen.getByTitle('Cỡ chữ lg');
+    const btnAplusplus = screen.getByTitle('Cỡ chữ xl');
+    expect(btnAminus).toBeDefined();
+    expect(btnAplus).toBeDefined();
+    expect(btnAplusplus).toBeDefined();
+
+    fireEvent.click(btnAplus);
+    fireEvent.click(btnAplusplus);
+    fireEvent.click(btnAminus);
+
+    // Kiểm tra các chế độ nền
+    const btnLight = screen.getByTitle(/Chế độ Sáng chuẩn/i);
+    const btnSepia = screen.getByTitle(/Chế độ Giấy ấm/i);
+    const btnDark = screen.getByTitle(/Chế độ Ban đêm/i);
+
+    expect(btnLight).toBeDefined();
+    expect(btnSepia).toBeDefined();
+    expect(btnDark).toBeDefined();
+
+    // Chuyển sang Giấy ấm Sepia
+    fireEvent.click(btnSepia);
+    expect(screen.getByText(/Giấy ấm/i)).toBeDefined();
+
+    // Chuyển sang Ban đêm Dark
+    fireEvent.click(btnDark);
+    expect(screen.getByText(/Đêm/i)).toBeDefined();
+  });
+
+  it('F-NEW-04: Đánh dấu bài viết yêu thích (Bookmark) lưu trữ LocalStorage và Thả cảm xúc độc giả (Reactions)', () => {
+    const testArticle = mockData.news[0];
+    localStorage.clear();
+
+    render(
+      <ArticleDetailModal
+        article={testArticle}
+        onClose={vi.fn()}
+      />
+    );
+
+    // Nút Bookmark
+    const btnBookmark = screen.getByTestId('bookmark-article-btn');
+    expect(btnBookmark).toBeDefined();
+    expect(btnBookmark.textContent).toContain('Lưu bài');
+
+    // Bấm lưu bài
+    fireEvent.click(btnBookmark);
+    expect(btnBookmark.textContent).toContain('Đã lưu');
+    const saved = JSON.parse(localStorage.getItem('pulse_saved_articles') || '[]');
+    expect(saved.length).toBe(1);
+    expect(saved[0].title).toBe(testArticle.title);
+
+    // Bấm lại để bỏ lưu
+    fireEvent.click(btnBookmark);
+    expect(btnBookmark.textContent).toContain('Lưu bài');
+    const unsaved = JSON.parse(localStorage.getItem('pulse_saved_articles') || '[]');
+    expect(unsaved.length).toBe(0);
+
+    // Reactions
+    const btnHelpful = screen.getByTestId('react-helpful-btn');
+    const btnInterested = screen.getByTestId('react-interested-btn');
+    const btnInsightful = screen.getByTestId('react-insightful-btn');
+
+    expect(btnHelpful).toBeDefined();
+    expect(btnInterested).toBeDefined();
+    expect(btnInsightful).toBeDefined();
+
+    // Thả tim Quan tâm
+    fireEvent.click(btnInterested);
+    expect(btnInterested.className).toContain('bg-rose-600');
+
+    // Đổi sang Hữu ích
+    fireEvent.click(btnHelpful);
+    expect(btnHelpful.className).toContain('bg-emerald-600');
+  });
+
+  it('F-NEW-05: Chuyển đổi đọc bài liên quan trong Modal và Bộ lọc danh mục tin tức (Category Tabs) kèm nút xem thêm', () => {
+    const onSelectArticleMock = vi.fn();
+    const testArticle = mockData.news[0];
+
+    // 1. Modal liên quan
+    render(
+      <ArticleDetailModal
+        article={testArticle}
+        onClose={vi.fn()}
+        allNews={mockData.news}
+        onSelectArticle={onSelectArticleMock}
+      />
+    );
+
+    expect(screen.getByText(/Tin tức cùng chuyên mục/i)).toBeDefined();
+    const relatedItem = screen.getByText(mockData.news[1].title);
+    expect(relatedItem).toBeDefined();
+    fireEvent.click(relatedItem);
+    expect(onSelectArticleMock).toHaveBeenCalledWith(mockData.news[1]);
+
+    cleanup();
+
+    // 2. DesktopLayout với Category Tabs
+    render(
+      <DesktopLayout
+        data={mockData}
+        onPlayVideo={vi.fn()}
+        onOpenCopilot={vi.fn()}
+        onSelectArticle={onSelectArticleMock}
+      />
+    );
+
+    const tabWeather = screen.getByTestId('news-tab-weather');
+    const tabTraffic = screen.getByTestId('news-tab-traffic');
+    const tabAll = screen.getByTestId('news-tab-all');
+
+    expect(tabWeather).toBeDefined();
+    expect(tabTraffic).toBeDefined();
+    expect(tabAll).toBeDefined();
+
+    // Click tab Thời tiết
+    fireEvent.click(tabWeather);
+    expect(tabWeather.className).toContain('bg-[#ff315f]');
+
+    // Click tab Tất cả
+    fireEvent.click(tabAll);
+    expect(tabAll.className).toContain('bg-[#ff315f]');
   });
 
   it('F-LAY-03: BrandLogo nhận diện thương hiệu chuẩn xác và bộ lọc tìm kiếm tin tức tức thời', () => {
