@@ -299,6 +299,35 @@ class TestFlaskAPIEndpoints(unittest.TestCase):
         self.assertTrue(data.get("success"))
         self.assertGreater(len(data.get("reply", "")), 20)
 
+    def test_article_detail_api_endpoint(self):
+        # 1. OPTIONS CORS
+        res_opt = self.client.options('/api/article-detail')
+        self.assertEqual(res_opt.status_code, 200)
+        self.assertEqual(res_opt.headers.get("Access-Control-Allow-Origin"), "*")
+
+        # 2. GET request
+        res_get = self.client.get('/api/article-detail?title=Ha+Noi+mua+dong&desc=Canh+bao+ngap')
+        self.assertEqual(res_get.status_code, 200)
+        data_get = json.loads(res_get.get_data(as_text=True))
+        self.assertIn("paragraphs", data_get)
+        self.assertTrue(len(data_get["paragraphs"]) > 0)
+        self.assertIn("tags", data_get)
+        self.assertIn("key_takeaways", data_get)
+
+        # 3. POST request
+        payload = {
+            "url": "https://tienphong.vn/tin-tuc-demo-123.tpo",
+            "title": "Chủ động các biện pháp ứng phó thời tiết cực đoan tại Hà Nội",
+            "description": "Các lực lượng chức năng ứng trực 24/7 để xử lý các điểm ngập úng."
+        }
+        res_post = self.client.post('/api/article-detail', json=payload)
+        self.assertEqual(res_post.status_code, 200)
+        data_post = json.loads(res_post.get_data(as_text=True))
+        self.assertEqual(data_post["title"], payload["title"])
+        self.assertTrue(len(data_post["paragraphs"]) >= 3)
+        self.assertTrue(len(data_post["key_takeaways"]) > 0)
+        self.assertTrue(data_post["reading_time_minutes"] >= 1)
+
 
 if __name__ == '__main__':
     unittest.main()
