@@ -228,12 +228,15 @@ export function ArticleDetailModal({
   const [readingTheme, setReadingTheme] = useState<ReadingTheme>("light");
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [speechRate, setSpeechRate] = useState<number>(1.0);
-  const [ttsEngine, setTtsEngine] = useState<"vieneu" | "web_speech">("vieneu");
+  const [ttsEngine, setTtsEngine] = useState<"vieneu" | "web_speech">("web_speech");
   const [selectedVoice, setSelectedVoice] = useState<string>("Mai Anh");
   const [availableVoices, setAvailableVoices] = useState<VieNeuVoice[]>(DEFAULT_VIENEU_VOICES);
   const [isTtsLoading, setIsTtsLoading] = useState(false);
   const [audioError, setAudioError] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [currentChunkIndex, setCurrentChunkIndex] = useState<number>(-1);
+  const speechQueueRef = useRef<string[]>([]);
+  const watchdogRef = useRef<any>(null);
 
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [activeTab, setActiveTab] = useState<"article" | "ai_analysis">("article");
@@ -249,6 +252,10 @@ export function ArticleDetailModal({
   const [loadingDetail, setLoadingDetail] = useState(false);
 
   const stopAllAudio = useCallback(() => {
+    if (watchdogRef.current) {
+      clearInterval(watchdogRef.current);
+      watchdogRef.current = null;
+    }
     if (audioRef.current) {
       try {
         audioRef.current.pause();
@@ -261,7 +268,47 @@ export function ArticleDetailModal({
     }
     setIsSpeaking(false);
     setIsTtsLoading(false);
+    setCurrentChunkIndex(-1);
   }, []);
+
+  const playWebSpeechChunk = useCallback((index: number, queue: string[], rate: number) => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    if (index >= queue.length) {
+      stopAllAudio();
+      return;
+    }
+
+    setCurrentChunkIndex(index);
+    const chunkText = queue[index];
+    const utterance = new SpeechSynthesisUtterance(chunkText);
+    utterance.lang = "vi-VN";
+    utterance.rate = rate;
+
+    try {
+      const voices = window.speechSynthesis.getVoices();
+      const viVoice = voices.find((v) => v.lang.startsWith("vi") || v.lang.includes("VN"));
+      if (viVoice) {
+        utterance.voice = viVoice;
+      }
+    } catch {}
+
+    utterance.onend = () => {
+      if (index + 1 < queue.length) {
+        playWebSpeechChunk(index + 1, queue, rate);
+      } else {
+        stopAllAudio();
+      }
+    };
+    utterance.onerror = () => {
+      if (index + 1 < queue.length) {
+        playWebSpeechChunk(index + 1, queue, rate);
+      } else {
+        stopAllAudio();
+      }
+    };
+
+    window.speechSynthesis.speak(utterance);
+  }, [stopAllAudio]);
 
   // Keyboard navigation & body scroll lock
   useEffect(() => {
@@ -441,33 +488,45 @@ export function ArticleDetailModal({
       ? detailedContent.paragraphs
       : (article.description ? [article.description] : []);
 
-    const fullArticleSections: string[] = [
+    const queue: string[] = [
       `Tiêu đề bài viết: ${article.title}.`,
       article.description ? `Tóm tắt sự kiện: ${article.description}.` : "",
       ...allParagraphs,
     ];
 
     if (detailedContent?.keyTakeaways && detailedContent.keyTakeaways.length > 0) {
-      fullArticleSections.push(`Điểm cốt lõi cần lưu ý: ${detailedContent.keyTakeaways.join(". ")}.`);
+      queue.push(`Điểm cốt lõi cần lưu ý: ${detailedContent.keyTakeaways.join(". ")}.`);
+    }
+    if (detailedContent?.quote) {
+      queue.push(`Nhận định từ tòa soạn: ${detailedContent.quote}.`);
+    }
+    if (detailedContent?.aiAnalysis?.safetyAdvice) {
+      queue.push(`Khuyến nghị an toàn: ${detailedContent.aiAnalysis.safetyAdvice}.`);
     }
 
-    const fullTextToRead = fullArticleSections.filter(Boolean).join("\n\n");
+    const cleanQueue = queue.filter(Boolean);
+    speechQueueRef.current = cleanQueue;
 
-    // Nếu chọn chế độ Web Speech hoặc đang trong môi trường kiểm thử jsdom
+    // Chế độ Web Speech hoặc môi trường kiểm thử jsdom (Khởi chạy tức thì 0ms không bao giờ bị chặn)
     if (ttsEngine === "web_speech" || isJsdomEnv) {
       if (typeof window === "undefined" || !("speechSynthesis" in window)) {
         alert("Trình duyệt không hỗ trợ đọc giọng nói Web Speech.");
         return;
       }
       stopAllAudio();
-      const textToRead = `${article.title}. ${article.description ? article.description + ". " : ""}${allParagraphs.join(". ")}`;
-      const utterance = new SpeechSynthesisUtterance(textToRead);
-      utterance.lang = "vi-VN";
-      utterance.rate = speechRate;
-      utterance.onend = () => setIsSpeaking(false);
-      utterance.onerror = () => setIsSpeaking(false);
-      window.speechSynthesis.speak(utterance);
       setIsSpeaking(true);
+
+      // Chromium watchdog: tự động resume nếu trình duyệt pause sau 14s
+      if (watchdogRef.current) clearInterval(watchdogRef.current);
+      watchdogRef.current = setInterval(() => {
+        if (typeof window !== "undefined" && "speechSynthesis" in window) {
+          if (window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
+            window.speechSynthesis.resume();
+          }
+        }
+      }, 4000);
+
+      playWebSpeechChunk(0, cleanQueue, speechRate);
       return;
     }
 
@@ -477,26 +536,40 @@ export function ArticleDetailModal({
       setAudioError(null);
       stopAllAudio();
 
-      const response = await fetch(`${backendUrl}/api/tts/vieneu`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          text: fullTextToRead,
-          voice: selectedVoice,
-          speed: speechRate,
-        }),
-      });
+      const candidateUrls = [
+        "http://localhost:10000",
+        "http://127.0.0.1:10000",
+        backendUrl,
+      ].filter(Boolean);
 
-      if (!response.ok) {
-        throw new Error(`VieNeu server HTTP ${response.status}`);
+      let audioData: string | null = null;
+      for (const bUrl of candidateUrls) {
+        try {
+          const response = await fetch(`${bUrl}/api/tts/vieneu`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              text: cleanQueue.join("\n\n"),
+              voice: selectedVoice,
+              speed: speechRate,
+            }),
+            signal: AbortSignal.timeout(3000),
+          });
+          if (response.ok) {
+            const resData = await response.json();
+            if (resData.success && resData.audio) {
+              audioData = resData.audio;
+              break;
+            }
+          }
+        } catch {}
       }
 
-      const resData = await response.json();
-      if (!resData.success || !resData.audio) {
-        throw new Error(resData.error || "Không nhận được dữ liệu âm thanh từ server");
+      if (!audioData) {
+        throw new Error("Không thể kết nối VieNeu-TTS server");
       }
 
-      const audio = new Audio(resData.audio);
+      const audio = new Audio(audioData);
       audio.playbackRate = speechRate;
       audio.onended = () => {
         setIsSpeaking(false);
@@ -513,19 +586,12 @@ export function ArticleDetailModal({
       setIsSpeaking(true);
     } catch (err: any) {
       console.warn("VieNeu-TTS backend error, falling back to Web Speech:", err);
-      setAudioError("VieNeu-TTS đang bận hoặc phản hồi chậm. Đã tự động kích hoạt Web Speech dự phòng.");
+      setAudioError("VieNeu-TTS ngoại tuyến. Hệ thống đã tự động chuyển sang giọng nói Web Speech tức thì.");
 
-      // Fallback ngay lập tức sang Web Speech để người dùng không bị ngắt mạch nghe
+      // Fallback ngay lập tức sang Web Speech để người dùng nghe được bài viết
       if (typeof window !== "undefined" && "speechSynthesis" in window) {
-        window.speechSynthesis.cancel();
-        const textToRead = `${article.title}. ${article.description ? article.description + ". " : ""}${allParagraphs.join(". ")}`;
-        const utterance = new SpeechSynthesisUtterance(textToRead);
-        utterance.lang = "vi-VN";
-        utterance.rate = speechRate;
-        utterance.onend = () => setIsSpeaking(false);
-        utterance.onerror = () => setIsSpeaking(false);
-        window.speechSynthesis.speak(utterance);
         setIsSpeaking(true);
+        playWebSpeechChunk(0, cleanQueue, speechRate);
       }
     } finally {
       setIsTtsLoading(false);
@@ -547,13 +613,8 @@ export function ArticleDetailModal({
     if (isSpeaking && (ttsEngine === "web_speech" || isJsdomEnv)) {
       if (typeof window !== "undefined" && "speechSynthesis" in window) {
         window.speechSynthesis.cancel();
-        const textToRead = `${article.title}. ${article.description}. ${detailedContent?.paragraphs.join(". ") || ""}`;
-        const utterance = new SpeechSynthesisUtterance(textToRead);
-        utterance.lang = "vi-VN";
-        utterance.rate = newRate;
-        utterance.onend = () => setIsSpeaking(false);
-        utterance.onerror = () => setIsSpeaking(false);
-        window.speechSynthesis.speak(utterance);
+        const currentIdx = Math.max(0, currentChunkIndex);
+        playWebSpeechChunk(currentIdx, speechQueueRef.current, newRate);
       }
     }
   };
@@ -1074,11 +1135,11 @@ export function ArticleDetailModal({
                   <div className="flex items-center gap-2.5">
                     <span className="size-2.5 rounded-full bg-emerald-500 animate-ping shrink-0" />
                     <span>
-                      🎙️ <strong>Đang đọc toàn văn bài viết:</strong> Tiêu đề, mô tả và trọn vẹn {detailedContent?.paragraphs.length || 0} đoạn nội dung chi tiết.
+                      🎙️ <strong>Đang đọc AI:</strong> {currentChunkIndex === 0 ? "Tiêu đề bài viết" : currentChunkIndex === 1 ? "Tóm tắt sự kiện" : currentChunkIndex >= 2 && currentChunkIndex < 2 + (detailedContent?.paragraphs.length || 0) ? `Đoạn ${currentChunkIndex - 1}/${detailedContent?.paragraphs.length || 0}` : "Phân tích & khuyến nghị"} (Đọc 100% toàn văn)
                     </span>
                   </div>
                   <span className="font-mono text-[11px] font-bold bg-white/50 dark:bg-black/40 px-2 py-0.5 rounded-md shrink-0">
-                    {ttsEngine === "vieneu" ? "VieNeu AI 24kHz" : "Web Speech"}
+                    {ttsEngine === "vieneu" ? "VieNeu AI 24kHz" : "Web Speech vi-VN"}
                   </span>
                 </div>
               )}
@@ -1092,11 +1153,21 @@ export function ArticleDetailModal({
                     <div className="h-4 bg-current/10 rounded w-4/6" />
                   </div>
                 ) : (
-                  detailedContent?.paragraphs.map((p, idx) => (
-                    <p key={idx} className="text-justify indent-4">
-                      {p}
-                    </p>
-                  ))
+                  detailedContent?.paragraphs.map((p, idx) => {
+                    const isThisParaActive = isSpeaking && currentChunkIndex === 2 + idx;
+                    return (
+                      <p
+                        key={idx}
+                        className={`text-justify indent-4 transition-all duration-300 rounded-lg p-2 ${
+                          isThisParaActive
+                            ? "bg-[#ff315f]/10 border-l-4 border-[#ff315f] font-medium shadow-xs"
+                            : ""
+                        }`}
+                      >
+                        {p}
+                      </p>
+                    );
+                  })
                 )}
               </div>
 
