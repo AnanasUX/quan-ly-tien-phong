@@ -2082,6 +2082,149 @@ def api_copilot_chat():
         return response, 200
 
 # =====================================================================
+# [PHẦN 8B] VIENEU-TTS AI SPEECH SYNTHESIS ENGINE (pnnbao97/VieNeu-TTS)
+# =====================================================================
+
+try:
+    from vieneu_service import vieneu_manager, VIENEU_VOICES
+    VIENEU_TTS_AVAILABLE = True
+except Exception as e:
+    VIENEU_TTS_AVAILABLE = False
+    vieneu_manager = None
+    VIENEU_VOICES = []
+
+@app.route('/api/tts/status', methods=['GET', 'OPTIONS'])
+def api_tts_status():
+    if request.method == 'OPTIONS':
+        res = jsonify({"status": "ok"})
+        res.headers.add("Access-Control-Allow-Origin", "*")
+        res.headers.add("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        res.headers.add("Access-Control-Allow-Methods", "GET, OPTIONS")
+        return res, 200
+    try:
+        if VIENEU_TTS_AVAILABLE and vieneu_manager:
+            status = vieneu_manager.get_status()
+            status["voices"] = vieneu_manager.get_voices()
+        else:
+            status = {
+                "ready": False,
+                "engine": "VieNeu-TTS",
+                "error": "Module not available on server",
+                "voices": []
+            }
+        resp = jsonify(status)
+        resp.headers.add("Access-Control-Allow-Origin", "*")
+        return resp, 200
+    except Exception as e:
+        return jsonify({"ready": False, "error": str(e)}), 500
+
+@app.route('/api/tts/voices', methods=['GET', 'OPTIONS'])
+def api_tts_voices():
+    if request.method == 'OPTIONS':
+        res = jsonify({"status": "ok"})
+        res.headers.add("Access-Control-Allow-Origin", "*")
+        return res, 200
+    try:
+        voices = vieneu_manager.get_voices() if (VIENEU_TTS_AVAILABLE and vieneu_manager) else []
+        resp = jsonify({"success": True, "voices": voices})
+        resp.headers.add("Access-Control-Allow-Origin", "*")
+        return resp, 200
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/tts/vieneu', methods=['POST', 'OPTIONS'])
+@app.route('/api/tts', methods=['POST', 'OPTIONS'])
+def api_tts_synthesize():
+    if request.method == 'OPTIONS':
+        res = jsonify({"status": "ok"})
+        res.headers.add("Access-Control-Allow-Origin", "*")
+        res.headers.add("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        res.headers.add("Access-Control-Allow-Methods", "POST, OPTIONS")
+        return res, 200
+
+    if not VIENEU_TTS_AVAILABLE or not vieneu_manager:
+        return jsonify({
+            "success": False,
+            "error": "VieNeu-TTS is not configured or available on this server.",
+            "fallback": "web_speech"
+        }), 503
+
+    try:
+        data = request.get_json(silent=True) or {}
+        text = (data.get("text") or data.get("input") or "").strip()
+        voice = data.get("voice", "Mai Anh")
+        speed = float(data.get("speed", 1.0))
+        output_format = (data.get("format") or "").lower()
+
+        if not text:
+            return jsonify({"success": False, "error": "Thiếu văn bản 'text' cần chuyển đổi thành giọng đọc."}), 400
+
+        res = vieneu_manager.synthesize(text=text, voice=voice, speed=speed)
+
+        # Nếu client muốn nhận trực tiếp binary WAV
+        if output_format == "wav" or "audio/wav" in request.headers.get("Accept", ""):
+            from flask import Response
+            response = Response(res["wav_bytes"], mimetype="audio/wav")
+            response.headers["Content-Disposition"] = "inline; filename=speech.wav"
+            response.headers["Access-Control-Allow-Origin"] = "*"
+            return response
+
+        # Mặc định trả về JSON chứa base64 audio data URI
+        payload = {
+            "success": True,
+            "audio": res["audio"],
+            "duration_seconds": res["duration_seconds"],
+            "sample_rate": res["sample_rate"],
+            "voice": res["voice"],
+            "voice_info": res.get("voice_info"),
+            "speed": res["speed"],
+            "engine": res["engine"],
+            "cached": res.get("cached", False)
+        }
+        response = jsonify(payload)
+        response.headers.add("Access-Control-Allow-Origin", "*")
+        return response, 200
+    except Exception as e:
+        response = jsonify({
+            "success": False,
+            "error": str(e),
+            "fallback": "web_speech"
+        })
+        response.headers.add("Access-Control-Allow-Origin", "*")
+        return response, 500
+
+@app.route('/v1/audio/speech', methods=['POST', 'OPTIONS'])
+def api_openai_speech_compatible():
+    """Endpoint tương thích chuẩn OpenAI TTS API (/v1/audio/speech)"""
+    if request.method == 'OPTIONS':
+        res = jsonify({"status": "ok"})
+        res.headers.add("Access-Control-Allow-Origin", "*")
+        res.headers.add("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        res.headers.add("Access-Control-Allow-Methods", "POST, OPTIONS")
+        return res, 200
+
+    if not VIENEU_TTS_AVAILABLE or not vieneu_manager:
+        return jsonify({"error": {"message": "TTS engine not available"}}), 503
+
+    try:
+        data = request.get_json(silent=True) or {}
+        text = (data.get("input") or data.get("text") or "").strip()
+        voice = data.get("voice", "Mai Anh")
+        speed = float(data.get("speed", 1.0))
+        if not text:
+            return jsonify({"error": {"message": "Input text required"}}), 400
+        
+        res = vieneu_manager.synthesize(text=text, voice=voice, speed=speed)
+        from flask import Response
+        response = Response(res["wav_bytes"], mimetype="audio/wav")
+        response.headers["Content-Disposition"] = "inline; filename=speech.wav"
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        return response
+    except Exception as e:
+        return jsonify({"error": {"message": str(e)}}), 500
+
+
+# =====================================================================
 # [PHẦN 9] XỬ LÝ UPDATE TELEGRAM (dùng chung Polling + Webhook)
 # =====================================================================
 

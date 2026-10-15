@@ -328,6 +328,70 @@ class TestFlaskAPIEndpoints(unittest.TestCase):
         self.assertTrue(len(data_post["key_takeaways"]) > 0)
         self.assertTrue(data_post["reading_time_minutes"] >= 1)
 
+    def test_tts_status_endpoint(self):
+        # OPTIONS CORS
+        res_opt = self.client.options('/api/tts/status')
+        self.assertEqual(res_opt.status_code, 200)
+        self.assertEqual(res_opt.headers.get("Access-Control-Allow-Origin"), "*")
+
+        # GET Status
+        res = self.client.get('/api/tts/status')
+        self.assertEqual(res.status_code, 200)
+        data = json.loads(res.get_data(as_text=True))
+        self.assertEqual(data.get("engine"), "VieNeu-TTS")
+        self.assertIn("voices", data)
+        self.assertGreater(len(data["voices"]), 0)
+
+    def test_tts_voices_endpoint(self):
+        res = self.client.get('/api/tts/voices')
+        self.assertEqual(res.status_code, 200)
+        data = json.loads(res.get_data(as_text=True))
+        self.assertTrue(data.get("success"))
+        self.assertIsInstance(data.get("voices"), list)
+        self.assertGreaterEqual(len(data["voices"]), 10)
+
+    def test_tts_vieneu_endpoint_and_cache(self):
+        # OPTIONS CORS
+        res_opt = self.client.options('/api/tts/vieneu')
+        self.assertEqual(res_opt.status_code, 200)
+
+        # POST synthesis
+        payload = {
+            "text": "Báo Tiền Phong - Tiếng nói của Đoàn Thanh niên Cộng sản Hồ Chí Minh.",
+            "voice": "Mai Anh",
+            "speed": 1.0
+        }
+        res = self.client.post('/api/tts/vieneu', json=payload)
+        self.assertEqual(res.status_code, 200)
+        data = json.loads(res.get_data(as_text=True))
+        self.assertTrue(data.get("success"))
+        self.assertIn("audio", data)
+        self.assertTrue(data["audio"].startswith("data:audio/wav;base64,"))
+        self.assertEqual(data.get("voice"), "Mai Anh")
+        self.assertGreater(data.get("duration_seconds", 0), 0)
+
+        # Second call to test caching
+        res_cached = self.client.post('/api/tts/vieneu', json=payload)
+        self.assertEqual(res_cached.status_code, 200)
+        data_cached = json.loads(res_cached.get_data(as_text=True))
+        self.assertTrue(data_cached.get("cached"))
+
+    def test_tts_empty_payload_validation(self):
+        res = self.client.post('/api/tts/vieneu', json={"text": ""})
+        self.assertEqual(res.status_code, 400)
+
+    def test_openai_speech_compatible_endpoint(self):
+        payload = {
+            "input": "Kính chào quý vị thính giả.",
+            "voice": "Mai Anh",
+            "speed": 1.0
+        }
+        res = self.client.post('/v1/audio/speech', json=payload)
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.headers.get("Content-Type"), "audio/wav")
+        self.assertGreater(len(res.data), 1000)
+
 
 if __name__ == '__main__':
     unittest.main()
+
