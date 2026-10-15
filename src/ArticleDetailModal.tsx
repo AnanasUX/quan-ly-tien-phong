@@ -436,6 +436,23 @@ export function ArticleDetailModal({
       typeof navigator !== "undefined" &&
       navigator.userAgent?.toLowerCase().includes("jsdom");
 
+    // Chuẩn bị toàn bộ 100% nội dung chi tiết bài viết (không bỏ sót bất kỳ đoạn văn nào)
+    const allParagraphs = detailedContent?.paragraphs && detailedContent.paragraphs.length > 0
+      ? detailedContent.paragraphs
+      : (article.description ? [article.description] : []);
+
+    const fullArticleSections: string[] = [
+      `Tiêu đề bài viết: ${article.title}.`,
+      article.description ? `Tóm tắt sự kiện: ${article.description}.` : "",
+      ...allParagraphs,
+    ];
+
+    if (detailedContent?.keyTakeaways && detailedContent.keyTakeaways.length > 0) {
+      fullArticleSections.push(`Điểm cốt lõi cần lưu ý: ${detailedContent.keyTakeaways.join(". ")}.`);
+    }
+
+    const fullTextToRead = fullArticleSections.filter(Boolean).join("\n\n");
+
     // Nếu chọn chế độ Web Speech hoặc đang trong môi trường kiểm thử jsdom
     if (ttsEngine === "web_speech" || isJsdomEnv) {
       if (typeof window === "undefined" || !("speechSynthesis" in window)) {
@@ -443,7 +460,7 @@ export function ArticleDetailModal({
         return;
       }
       stopAllAudio();
-      const textToRead = `${article.title}. ${article.description}. ${detailedContent?.paragraphs.join(". ") || ""}`;
+      const textToRead = `${article.title}. ${article.description ? article.description + ". " : ""}${allParagraphs.join(". ")}`;
       const utterance = new SpeechSynthesisUtterance(textToRead);
       utterance.lang = "vi-VN";
       utterance.rate = speechRate;
@@ -454,26 +471,17 @@ export function ArticleDetailModal({
       return;
     }
 
-    // Chế độ VieNeu-TTS AI (Mô hình nơ-ron tiếng Việt siêu thực pnnbao97/VieNeu-TTS)
+    // Chế độ VieNeu-TTS AI (Mô hình nơ-ron tiếng Việt siêu thực pnnbao97/VieNeu-TTS đọc 100% chi tiết)
     try {
       setIsTtsLoading(true);
       setAudioError(null);
       stopAllAudio();
 
-      // Đọc tiêu đề + mô tả + các đoạn chính
-      const sampleText = [
-        article.title,
-        article.description || "",
-        ...(detailedContent?.paragraphs?.slice(0, 4) || []),
-      ]
-        .filter(Boolean)
-        .join(". ");
-
       const response = await fetch(`${backendUrl}/api/tts/vieneu`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          text: sampleText,
+          text: fullTextToRead,
           voice: selectedVoice,
           speed: speechRate,
         }),
@@ -510,7 +518,7 @@ export function ArticleDetailModal({
       // Fallback ngay lập tức sang Web Speech để người dùng không bị ngắt mạch nghe
       if (typeof window !== "undefined" && "speechSynthesis" in window) {
         window.speechSynthesis.cancel();
-        const textToRead = `${article.title}. ${article.description}. ${detailedContent?.paragraphs.join(". ") || ""}`;
+        const textToRead = `${article.title}. ${article.description ? article.description + ". " : ""}${allParagraphs.join(". ")}`;
         const utterance = new SpeechSynthesisUtterance(textToRead);
         utterance.lang = "vi-VN";
         utterance.rate = speechRate;
@@ -767,7 +775,9 @@ export function ArticleDetailModal({
                     <span className="w-1 bg-emerald-500 rounded-full animate-bounce [animation-delay:150ms] h-2/3" />
                     <span className="w-1 bg-emerald-500 rounded-full animate-bounce [animation-delay:300ms] h-full" />
                   </div>
-                  <span className="text-[11px] font-mono font-bold">Đang phát</span>
+                  <span className="text-[11px] font-mono font-bold">
+                    Đang phát ({detailedContent?.paragraphs.length || 1} đoạn)
+                  </span>
                   <button
                     onClick={handleStopSpeech}
                     title="Dừng đọc"
@@ -879,6 +889,9 @@ export function ArticleDetailModal({
                   🎙️ Web Speech (Trình duyệt)
                 </button>
               </div>
+              <span className="hidden sm:inline-block px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold text-[10px]">
+                📖 Đọc 100% Toàn Văn ({detailedContent?.paragraphs.length || 1} đoạn)
+              </span>
             </div>
 
             {ttsEngine === "vieneu" && (
@@ -1054,6 +1067,21 @@ export function ArticleDetailModal({
               <div className={`p-4 rounded-xl border-l-4 border-[#ff315f] italic text-[14px] ${themeClasses.quoteBg}`}>
                 {detailedContent?.quote || "“Thông tin đa chiều, chính xác và kịp thời là chìa khóa để người dân đô thị chủ động ứng phó mọi tình huống trong đời sống thường nhật.”"}
               </div>
+
+              {/* Active Full Article Reading Status */}
+              {isSpeaking && (
+                <div className="flex items-center justify-between p-3 rounded-2xl bg-gradient-to-r from-emerald-500/15 via-teal-500/10 to-indigo-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-[12px] font-medium shadow-xs">
+                  <div className="flex items-center gap-2.5">
+                    <span className="size-2.5 rounded-full bg-emerald-500 animate-ping shrink-0" />
+                    <span>
+                      🎙️ <strong>Đang đọc toàn văn bài viết:</strong> Tiêu đề, mô tả và trọn vẹn {detailedContent?.paragraphs.length || 0} đoạn nội dung chi tiết.
+                    </span>
+                  </div>
+                  <span className="font-mono text-[11px] font-bold bg-white/50 dark:bg-black/40 px-2 py-0.5 rounded-md shrink-0">
+                    {ttsEngine === "vieneu" ? "VieNeu AI 24kHz" : "Web Speech"}
+                  </span>
+                </div>
+              )}
 
               {/* Rich Paragraphs Body */}
               <div className={`space-y-4 ${fontClasses} ${themeClasses.paragraph}`}>

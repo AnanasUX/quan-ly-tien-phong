@@ -1538,7 +1538,10 @@ export function MobileLayout({
               </div>
 
               <div className="flex items-center justify-between pt-1 w-full text-[12px]">
-                <span className="font-semibold text-[#ff315f]">📖 Đọc chi tiết bài viết →</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="font-semibold text-[#ff315f]">📖 Đọc chi tiết →</span>
+                  <span className="text-[10px] text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded font-medium border border-indigo-100">🔊 Nghe AI</span>
+                </div>
                 <a
                   href={item.link}
                   target="_blank"
@@ -1647,7 +1650,10 @@ export function TabletLayout({
                       <div className="bg-[#f7a928] rounded-[4px] size-2" />
                       <p className="font-['Inter:Semi_Bold'] font-semibold text-[#ff315f] text-[11px]">{feat.source}</p>
                     </div>
-                    <span className="text-[11px] text-[#ff315f] font-semibold">Đọc chi tiết →</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] text-[#ff315f] font-semibold">Đọc chi tiết →</span>
+                      <span className="text-[10px] text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded font-medium border border-indigo-100">🔊 Nghe AI</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1915,9 +1921,14 @@ export function DesktopLayout({
               </div>
 
               <div className="flex items-center justify-between pt-1 w-full border-t border-[#f4f6fa] text-[13px]">
-                <span className="font-semibold text-[#ff315f] group-hover:translate-x-1 transition-transform">
-                  📖 Đọc chi tiết bài viết →
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-[#ff315f] group-hover:translate-x-1 transition-transform">
+                    📖 Đọc chi tiết bài viết →
+                  </span>
+                  <span className="text-[11px] bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 font-semibold px-2 py-0.5 rounded-full flex items-center gap-1 border border-indigo-200/50">
+                    🦜 Nghe Đọc AI VieNeu
+                  </span>
+                </div>
                 <a
                   href={feat.link}
                   target="_blank"
@@ -1960,7 +1971,10 @@ export function DesktopLayout({
                   <p className="font-['Inter:Bold'] font-bold leading-5 text-[#182033] text-[14px] w-full line-clamp-2 group-hover:text-[#ff315f] transition-colors">{n.title}</p>
                   <p className="font-['Inter:Regular'] font-normal leading-[18px] text-[#5f687b] text-[12px] w-full line-clamp-2">{n.description}</p>
                   <div className="flex items-center justify-between pt-1 w-full text-[11px] border-t border-[#f8fafc]">
-                    <span className="font-semibold text-[#ff315f]">Đọc chi tiết →</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-semibold text-[#ff315f]">Đọc chi tiết →</span>
+                      <span className="text-[10px] text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded font-medium border border-indigo-100">🔊 Nghe AI</span>
+                    </div>
                     <a
                       href={n.link}
                       target="_blank"
