@@ -136,6 +136,7 @@ admin_location = {"lat": 20.9716, "lon": 105.7725, "name": "Hà Nội, VN"}
 TRANG_THAI_THOI_TIET = "BINH_THUONG"
 
 DANH_SACH_TRANG = {
+    "0":  {"ten": "📰 Tiền Phong",   "muc": ["https://tienphong.vn/rss/home.rss",            "https://tienphong.vn/rss/xa-hoi-2.rss",   "https://tienphong.vn/rss/kinh-te-3.rss",  "https://tienphong.vn/rss/dia-oc-166.rss"]},
     "1":  {"ten": "📰 Dân Trí",     "muc": ["https://dantri.com.vn/rss/home.rss",            "https://dantri.com.vn/rss/xa-hoi.rss",    "https://dantri.com.vn/rss/the-gioi.rss"]},
     "2":  {"ten": "🇻🇳 VnExpress",  "muc": ["https://vnexpress.net/rss/tin-moi-nhat.rss",     "https://vnexpress.net/rss/kinh-doanh.rss", "https://vnexpress.net/rss/thoi-su.rss"]},
     "3":  {"ten": "🌸 Kênh 14",     "muc": ["https://kenh14.vn/home.rss",                    "https://kenh14.vn/star.rss",               "https://kenh14.vn/xa-hoi.rss"]},
@@ -154,6 +155,7 @@ DANH_SACH_TRANG = {
 def load_data():
     global active_auto_news_chats, tracking_data, active_tracking_chats, pinned_weather_msgs
     global admin_location, last_weather_alerts, sent_articles_set, last_report_msgs, ai_chat_sessions
+    global user_last_news_sent
     with json_lock:
         if os.path.exists(FILE_DATA):
             try:
@@ -173,6 +175,15 @@ def load_data():
                     ai_chat_sessions  = set(data.get("ai_chat_sessions", []))
             except Exception:
                 pass
+        env_chats = (os.environ.get("TELEGRAM_AUTO_NEWS_CHATS") or
+                     os.environ.get("TELEGRAM_CHAT_ID") or
+                     os.environ.get("ADMIN_CHAT_ID") or
+                     os.environ.get("CHAT_ID"))
+        if env_chats:
+            for cid in str(env_chats).split(","):
+                c_clean = cid.strip()
+                if c_clean:
+                    active_auto_news_chats.add(c_clean)
 
 def save_data():
     with json_lock:
@@ -335,7 +346,8 @@ def gui_tin_nhan_telegram(chat_id, noi_dung, reply_markup=None, parse_mode="HTML
         except:
             pass
     
-    if isinstance(noi_dung, str) and ("⚠️" in noi_dung or "cảnh báo" in noi_dung.lower()):
+    # Chỉ tự động xóa tin nhắn cảnh báo lỗi hệ thống / phân quyền tạm thời (theo đặc tả Section 8.3), KHÔNG xóa bài viết tin tức hay bản tin thời tiết!
+    if isinstance(noi_dung, str) and any(err in noi_dung.lower() for err in ["không thể lấy dữ liệu", "không có quyền", "lỗi cú pháp", "lỗi hệ thống", "vui lòng thử lại"]):
         xoa_tin_nhan_sau_delay(chat_id, msg_ids, 30)
     
     if chat_id in user_sessions:
@@ -347,19 +359,31 @@ def gui_tin_nhan_telegram(chat_id, noi_dung, reply_markup=None, parse_mode="HTML
 
 def gui_anh_telegram(chat_id, photo_url, caption):
     url_send_photo = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto"
+    success = False
     try:
         res = requests.post(url_send_photo,
                             json={"chat_id": chat_id, "photo": photo_url,
                                   "caption": caption, "parse_mode": "HTML"}, timeout=10)
-        if res.status_code != 200:
+        if res.status_code == 200:
+            success = True
+        else:
             headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
             res_img = requests.get(photo_url, headers=headers, timeout=10)
             if res_img.status_code == 200:
                 files = {"photo": ("image.jpg", res_img.content)}
                 data  = {"chat_id": chat_id, "caption": caption, "parse_mode": "HTML"}
-                requests.post(url_send_photo, data=data, files=files, timeout=15)
+                res2 = requests.post(url_send_photo, data=data, files=files, timeout=15)
+                if res2.status_code == 200:
+                    success = True
     except Exception:
         pass
+
+    # Nếu gửi ảnh thất bại (do link ảnh chết/chặn CDN/timeout) -> Fallback gửi tin nhắn dạng text đảm bảo người dùng luôn nhận đủ bài viết
+    if not success:
+        try:
+            gui_tin_nhan_telegram(chat_id, caption, parse_mode="HTML")
+        except Exception:
+            pass
 
 # =====================================================================
 # [PHẦN 4] MODULE GEMINI CHAT (models 09/2026)
@@ -1055,6 +1079,10 @@ def lay_thoi_tiet_va_tin_tuc_hien_tai(include_news=True):
                 cid_str     = "broadcast_weather"
                 if cid_str not in sent_articles_set:
                     sent_articles_set[cid_str] = set()
+                # Nếu tất cả các bài Google News đã nằm trong tập đã gửi -> Tự động reset để luôn có tin thời sự mới nhất phục vụ người dùng
+                available_items = [it for it in items if it.link and it.link.text.strip() not in sent_articles_set[cid_str]]
+                if len(available_items) < 3:
+                    sent_articles_set[cid_str].clear()
                 for item in items:
                     link = item.link.text.strip()
                     if link in sent_articles_set[cid_str]:
@@ -1165,9 +1193,9 @@ def tim_toa_do_theo_ten(ten_dia_diem):
         pass
     return {"thanh_cong": False}
 
-def lay_tat_ca_bai_viet_ngau_nhien(sort_by_date=False):
+def lay_tat_ca_bai_viet_ngau_nhien(sort_by_date=True, chi_lay_hom_nay=True):
     danh_sach_tong  = []
-    headers         = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+    headers         = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
     nguon_rss       = [val for val in DANH_SACH_TRANG.values()]
 
     if TRANG_THAI_THOI_TIET == "MUA_CA_NGAY":
@@ -1179,10 +1207,14 @@ def lay_tat_ca_bai_viet_ngau_nhien(sort_by_date=False):
     nguon_rss.append({"ten": "🌐 Tin Nổi Bật",
                       "muc": ["https://news.google.com/rss?hl=vi&gl=VN&ceid=VN:vi"]})
 
+    now_dt = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=7)))
+    now_ts = now_dt.timestamp()
+    min_ts = now_ts - (36 * 3600)
+
     for t_info in nguon_rss:
         for url in t_info["muc"]:
             try:
-                res = requests.get(url, headers=headers, timeout=10)
+                res = requests.get(url, headers=headers, timeout=8)
                 res.encoding = 'utf-8'
                 if res.status_code != 200:
                     continue
@@ -1198,10 +1230,27 @@ def lay_tat_ca_bai_viet_ngau_nhien(sort_by_date=False):
                     desc      = html.unescape(raw_desc)
                     link      = item.link.text.strip() if item.link else ""
                     import email.utils
-                    try:
-                        ts = email.utils.parsedate_to_datetime(item.pubDate.text).timestamp() if item.pubDate else 0
-                    except:
-                        ts = 0
+                    ts = now_ts
+                    pub_str = ""
+                    is_too_old = False
+                    if item.pubDate and item.pubDate.text:
+                        try:
+                            p_dt = email.utils.parsedate_to_datetime(item.pubDate.text)
+                            ts = p_dt.timestamp()
+                            pub_str = item.pubDate.text.strip()
+                            if p_dt.year < now_dt.year:
+                                is_too_old = True
+                            elif chi_lay_hom_nay and ts < min_ts:
+                                is_too_old = True
+                        except Exception:
+                            ts = now_ts
+
+                    if is_too_old:
+                        continue
+
+                    if not pub_str:
+                        pub_str = datetime.datetime.fromtimestamp(ts, tz=datetime.timezone(datetime.timedelta(hours=7))).strftime('%a, %d %b %Y %H:%M:%S +0700')
+
                     img_url   = None
                     enc       = item.find('enclosure')
                     if enc and 'url' in enc.attrs:
@@ -1226,20 +1275,32 @@ def lay_tat_ca_bai_viet_ngau_nhien(sort_by_date=False):
                             "title": title, "description": c_desc,
                             "link": link,   "image": img_url,
                             "author": t_info["ten"], "source": t_info["ten"],
+                            "pubDate": pub_str,
                             "timestamp": ts
                         })
             except:
                 continue
+
+    seen_links = set()
+    unique_danh_sach = []
+    for b in danh_sach_tong:
+        if b["link"] not in seen_links:
+            seen_links.add(b["link"])
+            unique_danh_sach.append(b)
+
     if sort_by_date:
-        danh_sach_tong.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
+        unique_danh_sach.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
     else:
-        random.shuffle(danh_sach_tong)
-    return danh_sach_tong
+        unique_danh_sach.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
+        top_fresh = unique_danh_sach[:12]
+        random.shuffle(top_fresh)
+        unique_danh_sach = top_fresh + unique_danh_sach[12:]
+    return unique_danh_sach
 
 def lay_bai_viet_moi_chua_gui(chat_id_str, so_luong=5):
     if chat_id_str not in sent_articles_set:
         sent_articles_set[chat_id_str] = set()
-    tat_ca_tin = lay_tat_ca_bai_viet_ngau_nhien()
+    tat_ca_tin = lay_tat_ca_bai_viet_ngau_nhien(sort_by_date=True, chi_lay_hom_nay=True)
     chua_gui   = [b for b in tat_ca_tin if b['link'] not in sent_articles_set[chat_id_str]]
     if len(chua_gui) < so_luong:
         sent_articles_set[chat_id_str].clear()
@@ -1272,7 +1333,7 @@ def job_cap_nhat_docs_tin_tuc():
         noi_dung += "🌍 ĐIỂM TIN BÁO CHÍ TRONG NGÀY\n"
         noi_dung += "─" * 38 + "\n"
 
-        tin_tuc = lay_tat_ca_bai_viet_ngau_nhien()[:15]
+        tin_tuc = lay_tat_ca_bai_viet_ngau_nhien(sort_by_date=True, chi_lay_hom_nay=True)[:15]
         if not tin_tuc:
             noi_dung += "Không có dữ liệu tin tức mới.\n"
         else:
@@ -1298,15 +1359,16 @@ def job_tu_dong_day_tin():
         ht_time     = time.time()
         with json_lock: chats_to_send = list(active_auto_news_chats)
         valid_chats = [c for c in chats_to_send
-                       if ht_time - user_last_news_sent.get(str(c), 0) >= 3500]
+                       if ht_time - user_last_news_sent.get(str(c), 0) >= 1800]
         if not valid_chats:
             return
 
-        tat_ca_tin = lay_tat_ca_bai_viet_ngau_nhien()
+        tat_ca_tin = lay_tat_ca_bai_viet_ngau_nhien(sort_by_date=True, chi_lay_hom_nay=True)
         if not tat_ca_tin:
             return
 
-        for chat_id in valid_chats:
+        sent_to_any = False
+        for chat_id in set(valid_chats):
             chat_str = str(chat_id)
             if chat_str not in sent_articles_set:
                 sent_articles_set[chat_str] = set()
@@ -1330,13 +1392,15 @@ def job_tu_dong_day_tin():
                            f"📝 <i>{escape_html(bai['description'])}</i>\n\n"
                            f"📰 Nguồn: <code>{escape_html(bai['source'])}</code>\n"
                            f"🔗 <a href='{bai['link']}'>[Đọc bài viết đầy đủ tại đây]</a>")
-                if bai['image']:
+                if bai.get('image'):
                     gui_anh_telegram(chat_id, bai['image'], caption)
                 else:
                     gui_tin_nhan_telegram(chat_id, caption, parse_mode="HTML", disable_noti=True)
             user_last_news_sent[chat_str] = time.time()
-        save_data()
-    except:
+            sent_to_any = True
+        if sent_to_any:
+            save_data()
+    except Exception:
         pass
 
 def job_thoi_tiet_hang_gio():
@@ -1436,7 +1500,7 @@ def api_daily_news():
         aqi_level = res_aqi['list'][0]['main']['aqi']
         pm25      = res_aqi['list'][0]['components'].get('pm2_5', 0)
         trang_thai = xac_dinh_trang_thai_thoi_tiet(c_temp, feels_like, c_desc, n_pop, humidity)
-        tin_tuc   = lay_tat_ca_bai_viet_ngau_nhien()[:15]
+        tin_tuc   = lay_tat_ca_bai_viet_ngau_nhien(sort_by_date=True, chi_lay_hom_nay=True)[:15]
         data_response = {
             "timestamp": datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=7))).strftime('%H:%M %d/%m/%Y'),
             "location": ten_vi_tri,
