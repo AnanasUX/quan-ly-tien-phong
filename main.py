@@ -522,27 +522,188 @@ def xac_dinh_sheet_cho_thu_muc(folder_name):
         return "TOAN"
     return None
 
-def day_du_lieu_google_sheets():
+_drive_scan_cache = {"time": 0, "data": None}
+
+def quet_tat_ca_tien_do_drive(drive_service, force_refresh=False):
+    """Quét toàn bộ thư mục PowerPoint trên Google Drive theo cấu trúc chuẩn:
+    - Tìm các thư mục cha có 'TUAN' hoặc 'KNTT'
+    - Sắp xếp tăng dần theo số tuần (trich_xuat_so_tuan)
+    - Đối chiếu file gốc (trong thu_muc_goc) với file đã xử lý (.pptx)
+    - Quyết định trạng thái hoàn thành duy nhất cho cả Telegram và Google Sheets:
+      + Chỉ khi file gốc ghép cặp thành công với file đã xử lý -> is_completed = True ('Hoàn thành' / '(hoàn thành)')
+      + Không ghép cặp hoặc chưa có file làm -> is_completed = False ('Chưa làm' / không có '(hoàn thành)')
+    """
+    global _drive_scan_cache
+    now = time.time()
+    if not force_refresh and _drive_scan_cache["data"] is not None and (now - _drive_scan_cache["time"] < 60):
+        return _drive_scan_cache["data"]
+
+    query_main = (f"'{POWERPOINT_FOLDER_ID}' in parents and trashed=false "
+                  f"and mimeType='application/vnd.google-apps.folder'")
+    results = drive_service.files().list(q=query_main, fields="files(id, name)", pageSize=1000).execute()
+    raw_folders = results.get('files', [])
+    main_folders = sorted(raw_folders, key=lambda x: (trich_xuat_so_tuan(x['name']), x['name']))
+
+    folders_data = []
+
+    for main_folder in main_folders:
+        folder_name = main_folder['name']
+        folder_id = main_folder['id']
+
+        if not ("TUAN" in folder_name.upper() or "KNTT" in folder_name.upper()):
+            continue
+
+        target_sheet = xac_dinh_sheet_cho_thu_muc(folder_name)
+        if not target_sheet:
+            continue
+
+        match_tuan = re.search(r'(?i)tuan\s*(\d+)', folder_name)
+        tien_to = f"Tuan{match_tuan.group(1)}_" if match_tuan else ""
+
+        query_sub = f"'{folder_id}' in parents and trashed=false"
+        sub_results = drive_service.files().list(
+            q=query_sub, fields="files(id, name, mimeType)", pageSize=1000
+        ).execute()
+
+        thu_muc_goc_id = None
+        processed_files = []
+
+        for item in sub_results.get('files', []):
+            if item['mimeType'] == 'application/vnd.google-apps.folder':
+                if item['name'].strip().lower() == "thu_muc_goc":
+                    thu_muc_goc_id = item['id']
+            elif item['name'].lower().endswith('.pptx'):
+                processed_files.append(item['name'])
+
+        items = []
+
+        if thu_muc_goc_id:
+            orig_results = drive_service.files().list(
+                q=(f"'{thu_muc_goc_id}' in parents and trashed=false "
+                   f"and mimeType!='application/vnd.google-apps.folder'"),
+                fields="files(name)", pageSize=1000
+            ).execute()
+            original_files = sorted([f['name'] for f in orig_results.get('files', [])
+                                     if f['name'].lower().endswith('.pptx')])
+            processed_files = sorted(processed_files)
+            matched_processed = set()
+
+            for orig in original_files:
+                orig_clean = re.sub(r'\s+', '', re.sub(r'(?i)\.pptx$', '', orig).strip().lower())
+                found = None
+                for proc in processed_files:
+                    proc_clean = re.sub(r'\s+', '', re.sub(r'(?i)\.pptx$', '', proc).strip().lower())
+                    if orig_clean in proc_clean:
+                        found = proc
+                        break
+                if found:
+                    items.append({
+                        "orig": orig,
+                        "proc": found,
+                        "display": found,
+                        "is_completed": True
+                    })
+                    matched_processed.add(found)
+                else:
+                    expected = (tien_to + orig) if (tien_to and not orig.lower().startswith(tien_to.lower())) else orig
+                    items.append({
+                        "orig": orig,
+                        "proc": expected,
+                        "display": expected,
+                        "is_completed": False
+                    })
+
+            for proc in processed_files:
+                if proc not in matched_processed:
+                    expected_orig = re.sub(r'(?i)^tuan\d+_', '', proc) if tien_to else proc
+                    display_name = (tien_to + proc) if (tien_to and not proc.lower().startswith(tien_to.lower())) else proc
+                    items.append({
+                        "orig": expected_orig,
+                        "proc": proc,
+                        "display": display_name,
+                        "is_completed": False
+                    })
+        else:
+            all_pptx = list(processed_files)
+            for item in sub_results.get('files', []):
+                if item['mimeType'] == 'application/vnd.google-apps.folder' and item['name'].strip().lower() != "thu_muc_goc":
+                    sub_sub = drive_service.files().list(
+                        q=f"'{item['id']}' in parents and trashed=false",
+                        fields="files(name, mimeType, id)", pageSize=1000
+                    ).execute()
+                    for ii in sub_sub.get('files', []):
+                        if ii['name'].lower().endswith('.pptx'):
+                            all_pptx.append(ii['name'])
+                        elif ii['mimeType'] == 'application/vnd.google-apps.folder':
+                            deep = drive_service.files().list(
+                                q=f"'{ii['id']}' in parents and trashed=false",
+                                fields="files(name, mimeType)", pageSize=1000
+                            ).execute()
+                            for ditem in deep.get('files', []):
+                                if ditem['name'].lower().endswith('.pptx'):
+                                    all_pptx.append(ditem['name'])
+
+            all_pptx = sorted(list(set(all_pptx)), key=len)
+            matched_indices = set()
+
+            for i in range(len(all_pptx)):
+                if i in matched_indices:
+                    continue
+                ci = re.sub(r'\s+', '', re.sub(r'(?i)\.pptx$', '', all_pptx[i]).strip().lower())
+                for j in range(i + 1, len(all_pptx)):
+                    if j in matched_indices:
+                        continue
+                    cj = re.sub(r'\s+', '', re.sub(r'(?i)\.pptx$', '', all_pptx[j]).strip().lower())
+                    if ci in cj:
+                        items.append({
+                            "orig": all_pptx[i],
+                            "proc": all_pptx[j],
+                            "display": all_pptx[j],
+                            "is_completed": True
+                        })
+                        matched_indices.add(i)
+                        matched_indices.add(j)
+                        break
+
+            for i in range(len(all_pptx)):
+                if i not in matched_indices:
+                    d_name = all_pptx[i]
+                    expected = (tien_to + d_name) if (tien_to and not d_name.lower().startswith(tien_to.lower())) else d_name
+                    items.append({
+                        "orig": d_name,
+                        "proc": expected,
+                        "display": expected,
+                        "is_completed": False
+                    })
+
+        folders_data.append({
+            "folder_name": folder_name,
+            "target_sheet": target_sheet,
+            "items": items
+        })
+
+    _drive_scan_cache["time"] = time.time()
+    _drive_scan_cache["data"] = folders_data
+    return folders_data
+
+def day_du_lieu_google_sheets(drive_service=None, folders_data=None):
     """Quét Drive rồi phân loại ghi vào đúng Google Sheets ('TOAN' và 'TIENGVIET')
     theo cấu trúc A(STT) B(Thư mục cha) C(File gốc) D(File đã làm) E(Trạng thái).
     Sắp xếp tuần từ bé đến lớn tăng dần và STT tăng dần cho từng sheets.
+    Trạng thái 100% đồng bộ với Telegram: Có '(hoàn thành)' -> 'Hoàn thành', không có -> 'Chưa làm'.
     """
     if not GOOGLE_API_AVAILABLE or not os.path.exists('credentials.json'):
         return False, "Không tìm thấy credentials.json"
 
     try:
-        creds         = Credentials.from_service_account_file('credentials.json', scopes=GOOGLE_SCOPES)
-        drive_service = build('drive', 'v3', credentials=creds)
+        creds = Credentials.from_service_account_file('credentials.json', scopes=GOOGLE_SCOPES)
         sheets_service = build('sheets', 'v4', credentials=creds)
 
-        # ── 1. Quét Drive (sắp xếp tuần từ bé đến lớn) ─────────────────────
-        query_main = (f"'{POWERPOINT_FOLDER_ID}' in parents and trashed=false "
-                      f"and mimeType='application/vnd.google-apps.folder'")
-        results     = drive_service.files().list(q=query_main, fields="files(id, name)", pageSize=1000).execute()
-        raw_folders = results.get('files', [])
-        main_folders = sorted(raw_folders, key=lambda x: (trich_xuat_so_tuan(x['name']), x['name']))
+        if folders_data is None:
+            if drive_service is None:
+                drive_service = build('drive', 'v3', credentials=creds)
+            folders_data = quet_tat_ca_tien_do_drive(drive_service)
 
-        # Phân loại dữ liệu theo từng Sheet (TOAN và TIENGVIET)
         sheet_rows = {
             "TOAN": [],
             "TIENGVIET": []
@@ -552,82 +713,24 @@ def day_du_lieu_google_sheets():
             "TIENGVIET": 1
         }
 
-        for main_folder in main_folders:
-            folder_name = main_folder['name']
-            folder_id   = main_folder['id']
-
-            if not ("TUAN" in folder_name.upper() or "KNTT" in folder_name.upper()):
+        for folder in folders_data:
+            target_sheet = folder["target_sheet"]
+            if target_sheet not in sheet_rows:
                 continue
 
-            target_sheet = xac_dinh_sheet_cho_thu_muc(folder_name)
-            if not target_sheet:
-                continue
+            for it in folder["items"]:
+                stt = stt_counters[target_sheet]
+                status_str = "Hoàn thành" if it["is_completed"] else "Chưa làm"
+                sheet_rows[target_sheet].append([
+                    stt,
+                    folder["folder_name"],
+                    it["orig"],
+                    it["proc"],
+                    status_str
+                ])
+                stt_counters[target_sheet] += 1
 
-            match_tuan = re.search(r'(?i)tuan\s*(\d+)', folder_name)
-            tien_to    = f"Tuan{match_tuan.group(1)}_" if match_tuan else ""
-
-            query_sub   = f"'{folder_id}' in parents and trashed=false"
-            sub_results = drive_service.files().list(
-                q=query_sub, fields="files(id, name, mimeType)", pageSize=1000
-            ).execute()
-
-            thu_muc_goc_id  = None
-            processed_files = []
-
-            for item in sub_results.get('files', []):
-                if item['mimeType'] == 'application/vnd.google-apps.folder':
-                    if item['name'].strip().lower() == "thu_muc_goc":
-                        thu_muc_goc_id = item['id']
-                elif item['name'].lower().endswith('.pptx'):
-                    processed_files.append(item['name'])
-
-            if thu_muc_goc_id:
-                orig_results = drive_service.files().list(
-                    q=(f"'{thu_muc_goc_id}' in parents and trashed=false "
-                       f"and mimeType!='application/vnd.google-apps.folder'"),
-                    fields="files(name)", pageSize=1000
-                ).execute()
-                original_files  = sorted([f['name'] for f in orig_results.get('files', [])
-                                          if f['name'].lower().endswith('.pptx')])
-                processed_files = sorted(processed_files)
-                matched_processed = set()
-
-                for orig in original_files:
-                    orig_clean = re.sub(r'\s+', '', re.sub(r'(?i)\.pptx$', '', orig).strip().lower())
-                    found = None
-                    for proc in processed_files:
-                        proc_clean = re.sub(r'\s+', '', re.sub(r'(?i)\.pptx$', '', proc).strip().lower())
-                        if orig_clean in proc_clean:
-                            found = proc
-                            break
-                    # C = file gốc (thu_muc_goc), D = file đã xử lý
-                    stt = stt_counters[target_sheet]
-                    if found:
-                        sheet_rows[target_sheet].append([stt, folder_name, orig, found, "Hoàn thành"])
-                        matched_processed.add(found)
-                    else:
-                        # D = tên dự kiến (chưa tồn tại)
-                        expected = (tien_to + orig) if (tien_to and not orig.lower().startswith(tien_to.lower())) else orig
-                        sheet_rows[target_sheet].append([stt, folder_name, orig, expected, "Chưa làm"])
-                    stt_counters[target_sheet] += 1
-
-                # File processed không khớp gốc nào (thừa)
-                for proc in processed_files:
-                    if proc not in matched_processed:
-                        expected_orig = re.sub(r'(?i)^tuan\d+_', '', proc) if tien_to else proc
-                        stt = stt_counters[target_sheet]
-                        sheet_rows[target_sheet].append([stt, folder_name, expected_orig, proc, "Hoàn thành"])
-                        stt_counters[target_sheet] += 1
-            else:
-                # Không có thu_muc_goc → liệt kê processed_files trực tiếp
-                for proc in sorted(processed_files):
-                    stt = stt_counters[target_sheet]
-                    sheet_rows[target_sheet].append([stt, folder_name, "", proc, "Hoàn thành"])
-                    stt_counters[target_sheet] += 1
-
-        # ── 2. Ghi vào Google Sheets cho từng tab (TOAN và TIENGVIET) ────────
         sheet = sheets_service.spreadsheets()
-
         spreadsheet_info = sheet.get(spreadsheetId=SHEETS_ID).execute()
         existing_sheets = [s['properties']['title'] for s in spreadsheet_info.get('sheets', [])]
 
@@ -640,13 +743,11 @@ def day_du_lieu_google_sheets():
                 sheet.batchUpdate(spreadsheetId=SHEETS_ID, body=add_req).execute()
                 existing_sheets.append(s_name)
 
-            # Xóa toàn bộ dữ liệu cũ từ hàng 2
             sheet.values().clear(
                 spreadsheetId=SHEETS_ID,
                 range=f"'{s_name}'!A2:E"
             ).execute()
 
-            # Ghi dữ liệu mới từ hàng 2
             if rows_for_sheet:
                 sheet.values().update(
                     spreadsheetId=SHEETS_ID,
@@ -657,155 +758,48 @@ def day_du_lieu_google_sheets():
 
             summary_parts.append(f"{len(rows_for_sheet)} dòng vào '{s_name}'")
 
-        return True, f"Đã ghi " + ", ".join(summary_parts) + "."
+        return True, "Đã ghi " + ", ".join(summary_parts) + "."
 
     except Exception as e:
         return False, str(e)
 
 
-def tao_bao_cao_powerpoint():
+def tao_bao_cao_powerpoint(drive_service=None, folders_data=None):
     if not GOOGLE_API_AVAILABLE or not os.path.exists('credentials.json'):
         return "⚠️ Lỗi hệ thống: Không tìm thấy file <code>credentials.json</code>. Vui lòng thêm file này vào thư mục chứa code."
 
-    msg = "📊 <b>BÁO CÁO TIẾN ĐỘ POWERPOINT</b>\n━━━━━━━━━━━━━━━━━━━━━\n\n"
-
     try:
-        creds         = Credentials.from_service_account_file('credentials.json', scopes=GOOGLE_SCOPES)
-        drive_service = build('drive', 'v3', credentials=creds)
+        if folders_data is None:
+            if drive_service is None:
+                creds = Credentials.from_service_account_file('credentials.json', scopes=GOOGLE_SCOPES)
+                drive_service = build('drive', 'v3', credentials=creds)
+            folders_data = quet_tat_ca_tien_do_drive(drive_service)
 
-        query_main = (f"'{POWERPOINT_FOLDER_ID}' in parents and trashed=false "
-                      f"and mimeType='application/vnd.google-apps.folder'")
-        results     = drive_service.files().list(q=query_main, fields="files(id, name)", pageSize=1000).execute()
-        raw_folders = results.get('files', [])
+        msg = "📊 <b>BÁO CÁO TIẾN ĐỘ POWERPOINT</b>\n━━━━━━━━━━━━━━━━━━━━━\n\n"
+        co_du_lieu = False
 
-        main_folders = sorted(raw_folders, key=lambda x: (trich_xuat_so_tuan(x['name']), x['name']))
-        co_du_lieu   = False
-
-        for main_folder in main_folders:
-            folder_name = main_folder['name']
-            folder_id   = main_folder['id']
-
-            if not (folder_name.upper().startswith("TUAN") or
-                    folder_name.upper().startswith("KNTT") or
-                    "TUAN" in folder_name.upper()):
-                continue
-
+        for folder in folders_data:
+            folder_name = folder["folder_name"]
+            items = folder["items"]
             co_du_lieu = True
+
             msg += f"📁 <b>{escape_html(folder_name)}</b>\n  + Thư mục con: thu_muc_goc\n"
 
-            tien_to = ""
-            match_tuan = re.search(r'(?i)tuan\s*(\d+)', folder_name)
-            if match_tuan:
-                tien_to = f"Tuan{match_tuan.group(1)}_"
-
-            query_sub   = f"'{folder_id}' in parents and trashed=false"
-            sub_results = drive_service.files().list(
-                q=query_sub, fields="files(id, name, mimeType)", pageSize=1000
-            ).execute()
-
-            thu_muc_goc_id  = None
-            processed_files = []
-
-            for item in sub_results.get('files', []):
-                if item['mimeType'] == 'application/vnd.google-apps.folder':
-                    if item['name'].strip().lower() == "thu_muc_goc":
-                        thu_muc_goc_id = item['id']
-                elif item['name'].lower().endswith('.pptx'):
-                    processed_files.append(item['name'])
-
             file_list = []
+            for it in items:
+                if it["is_completed"]:
+                    file_list.append(f"    - {escape_html(it['display'])}(hoàn thành);")
+                else:
+                    file_list.append(f"    - {escape_html(it['display'])};")
 
-            if thu_muc_goc_id:
-                orig_results = drive_service.files().list(
-                    q=(f"'{thu_muc_goc_id}' in parents and trashed=false "
-                       f"and mimeType!='application/vnd.google-apps.folder'"),
-                    fields="files(name)", pageSize=1000
-                ).execute()
-                original_files  = sorted([f['name'] for f in orig_results.get('files', [])
-                                          if f['name'].lower().endswith('.pptx')])
-                processed_files = sorted(processed_files)
-                matched_processed = set()
+            if not file_list:
+                file_list.append("    - <i>Thư mục rỗng, chưa có file nào</i>;")
 
-                for orig in original_files:
-                    orig_clean = re.sub(r'\s+', '', re.sub(r'(?i)\.pptx$', '', orig).strip().lower())
-                    found = None
-                    for proc in processed_files:
-                        proc_clean = re.sub(r'\s+', '', re.sub(r'(?i)\.pptx$', '', proc).strip().lower())
-                        if orig_clean in proc_clean:
-                            found = proc
-                            break
-                    if found:
-                        file_list.append(f"    - {escape_html(found)}(hoàn thành);")
-                        matched_processed.add(found)
-                    else:
-                        display_name = orig
-                        if tien_to and not orig.lower().startswith(tien_to.lower()):
-                            display_name = tien_to + orig
-                        file_list.append(f"    - {escape_html(display_name)};")
-
-                for proc in processed_files:
-                    if proc not in matched_processed:
-                        display_name = proc
-                        if tien_to and not proc.lower().startswith(tien_to.lower()):
-                            display_name = tien_to + proc
-                        file_list.append(f"    - {escape_html(display_name)};")
-
-                if not original_files and not processed_files:
-                    file_list.append("    - <i>Thư mục gốc trống, chưa có file nào</i>;")
-
-            else:
-                all_pptx = list(processed_files)
-                for item in sub_results.get('files', []):
-                    if item['mimeType'] == 'application/vnd.google-apps.folder' and item['name'].strip().lower() != "thu_muc_goc":
-                        sub_sub = drive_service.files().list(
-                            q=f"'{item['id']}' in parents and trashed=false",
-                            fields="files(name, mimeType, id)", pageSize=1000
-                        ).execute()
-                        for ii in sub_sub.get('files', []):
-                            if ii['name'].lower().endswith('.pptx'):
-                                all_pptx.append(ii['name'])
-                            elif ii['mimeType'] == 'application/vnd.google-apps.folder':
-                                deep = drive_service.files().list(
-                                    q=f"'{ii['id']}' in parents and trashed=false",
-                                    fields="files(name, mimeType)", pageSize=1000
-                                ).execute()
-                                for ditem in deep.get('files', []):
-                                    if ditem['name'].lower().endswith('.pptx'):
-                                        all_pptx.append(ditem['name'])
-
-                all_pptx = sorted(list(set(all_pptx)), key=len)
-                matched_indices = set()
-
-                for i in range(len(all_pptx)):
-                    if i in matched_indices:
-                        continue
-                    ci = re.sub(r'\s+', '', re.sub(r'(?i)\.pptx$', '', all_pptx[i]).strip().lower())
-                    for j in range(i + 1, len(all_pptx)):
-                        if j in matched_indices:
-                            continue
-                        cj = re.sub(r'\s+', '', re.sub(r'(?i)\.pptx$', '', all_pptx[j]).strip().lower())
-                        if ci in cj:
-                            file_list.append(f"    - {escape_html(all_pptx[j])}(hoàn thành);")
-                            matched_indices.add(i)
-                            matched_indices.add(j)
-                            break
-
-                for i in range(len(all_pptx)):
-                    if i not in matched_indices:
-                        d_name = all_pptx[i]
-                        if tien_to and not d_name.lower().startswith(tien_to.lower()):
-                            d_name = tien_to + d_name
-                        file_list.append(f"    - {escape_html(d_name)};")
-
-                if not all_pptx:
-                    file_list.append("    - <i>Thư mục rỗng, chưa có file nào</i>;")
-
-            if file_list:
-                file_list.sort()
-                block = "\n".join(file_list)
-                if block.endswith(";"):
-                    block = block[:-1] + "."
-                msg += block + "\n\n"
+            file_list.sort()
+            block = "\n".join(file_list)
+            if block.endswith(";"):
+                block = block[:-1] + "."
+            msg += block + "\n\n"
 
         if not co_du_lieu:
             msg += "<i>Không tìm thấy thư mục nào chứa TUAN hoặc KNTT.</i>"
@@ -1736,7 +1730,7 @@ def xu_ly_telegram_update(data):
                     last_report_msgs[chat_id] = list(new_ids)
                     save_data()
 
-                    # 2. Sau khi Telegram trả đủ nội dung -> Tiến hành đồng bộ Google Sheets phân loại 2 tab (TOAN, TIENGVIET)
+                    # 2. Tiến hành đồng bộ Google Sheets phân loại 2 tab (TOAN, TIENGVIET) từ cache chuẩn
                     sheets_success, sheets_msg = day_du_lieu_google_sheets()
                     sync_text = (
                         f"📊 <b>Đồng bộ Google Sheets:</b> ✅ Thành công ({escape_html(sheets_msg)})"
