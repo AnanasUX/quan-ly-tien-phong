@@ -1450,7 +1450,10 @@ def job_thoi_tiet_hang_gio():
     except Exception:
         pass
 
-scheduler = BackgroundScheduler()
+try:
+    scheduler = BackgroundScheduler(timezone="Asia/Ho_Chi_Minh")
+except Exception:
+    scheduler = BackgroundScheduler()
 scheduler.add_job(func=job_tu_dong_day_tin,    trigger="cron", minute=30)
 scheduler.add_job(func=job_thoi_tiet_hang_gio, trigger="cron", minute=0)
 scheduler.add_job(func=job_cap_nhat_docs_tin_tuc, trigger="cron", hour=0, minute=1)
