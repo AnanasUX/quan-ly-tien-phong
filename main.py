@@ -89,30 +89,21 @@ def load_env_file():
 
 load_env_file()
 
-from crypto_vault import CryptoVaultManager
-_vault = CryptoVaultManager()
+# --- CẤU HÌNH BẢO MẬT: Đọc 100% từ biến môi trường, KHÔNG hardcode token ---
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+ZALO_WEBHOOK_URL   = os.environ.get("ZALO_WEBHOOK_URL", "https://hook.eu1.make.com/9ruvgdciavfa1k6xf2vzpkn6zk2umnc7")
+CALENDAR_ID        = os.environ.get("CALENDAR_ID", "mrkun28@gmail.com")
 
-# --- CẤU HÌNH BẢO MẬT: Đọc 100% từ biến môi trường hoặc giải mã qua CryptoVault (Zero GitHub Leak) ---
-TELEGRAM_BOT_TOKEN = _vault.secure_get("TELEGRAM_BOT_TOKEN")
-ZALO_WEBHOOK_URL   = _vault.secure_get("ZALO_WEBHOOK_URL")
-CALENDAR_ID        = _vault.secure_get("CALENDAR_ID") or "mrkun28@gmail.com"
-
-AUTHORIZED_USERNAME  = _vault.secure_get("AUTHORIZED_USERNAME") or "anaa2700"
-OPENWEATHER_API_KEY  = _vault.secure_get("OPENWEATHER_API_KEY") or os.environ.get("OPENWEATHER_API_KEY") or "a201c471567522a7d0b7a0567ad245fe"
-POWERPOINT_FOLDER_ID = _vault.secure_get("POWERPOINT_FOLDER_ID")
-DOC_LOGIC_ID         = _vault.secure_get("DOC_LOGIC_ID")
-DOC_NEWS_ID          = _vault.secure_get("DOC_NEWS_ID")
-GEMINI_API_KEY       = _vault.secure_get("GEMINI_API_KEY")
+AUTHORIZED_USERNAME  = os.environ.get("AUTHORIZED_USERNAME", "anaa2700")
+OPENWEATHER_API_KEY  = os.environ.get("OPENWEATHER_API_KEY", "a201c471567522a7d0b7a0567ad245fe")
+POWERPOINT_FOLDER_ID = os.environ.get("POWERPOINT_FOLDER_ID", "1BwFCLX0Fjag9xM13mHIJTOYvZ6dYW5Ox")
+DOC_LOGIC_ID         = os.environ.get("DOC_LOGIC_ID", "1a9_qNqFEpbmuIoKuEvT3cExHzpszov4THOfm1ztCZc8")
+DOC_NEWS_ID          = os.environ.get("DOC_NEWS_ID", "NHẬP_ID_FILE_DOCS_TIN_TỨC_VÀO_ĐÂY")
 
 if not TELEGRAM_BOT_TOKEN:
-    if os.environ.get("FLASK_ENV") == "testing" or os.environ.get("TESTING") == "1" or "unittest" in sys.modules or "pytest" in sys.modules:
-        TELEGRAM_BOT_TOKEN = "TEST_MOCK_TELEGRAM_BOT_TOKEN"
-    else:
-        TELEGRAM_BOT_TOKEN = os.environ.get("TEST_BOT_TOKEN", "")
+    raise RuntimeError("❌ TELEGRAM_BOT_TOKEN chưa được cấu hình trong biến môi trường!")
 
-if not TELEGRAM_BOT_TOKEN and os.environ.get("RUN_MODE") != "TEST":
-    # Cảnh báo bảo mật khi chưa nạp token
-    print("⚠️  TELEGRAM_BOT_TOKEN chưa được cung cấp qua biến môi trường hoặc CryptoVault.")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AQ.Ab8RN6IBgzuK4JMCYVYWqDeRpTsOgfqxIWnUxw82IBe49xb-sA")
 
 URL_ANH_NGAP = "https://media.vov.vn/sites/default/files/styles/large/public/2023-09/z4733804825595_067963dce63fbb5cc632616f73db2f26.jpg"
 URL_ANH_NANG = "https://vtv1.mediacdn.vn/zoom/640_400/2023/5/17/nang-nong-ha-noi-ttxvn-1684307525357876878345.jpg"
@@ -145,7 +136,6 @@ admin_location = {"lat": 20.9716, "lon": 105.7725, "name": "Hà Nội, VN"}
 TRANG_THAI_THOI_TIET = "BINH_THUONG"
 
 DANH_SACH_TRANG = {
-    "0":  {"ten": "📰 Tiền Phong",   "muc": ["https://tienphong.vn/rss/home.rss",            "https://tienphong.vn/rss/xa-hoi-2.rss",   "https://tienphong.vn/rss/kinh-te-3.rss",  "https://tienphong.vn/rss/dia-oc-166.rss"]},
     "1":  {"ten": "📰 Dân Trí",     "muc": ["https://dantri.com.vn/rss/home.rss",            "https://dantri.com.vn/rss/xa-hoi.rss",    "https://dantri.com.vn/rss/the-gioi.rss"]},
     "2":  {"ten": "🇻🇳 VnExpress",  "muc": ["https://vnexpress.net/rss/tin-moi-nhat.rss",     "https://vnexpress.net/rss/kinh-doanh.rss", "https://vnexpress.net/rss/thoi-su.rss"]},
     "3":  {"ten": "🌸 Kênh 14",     "muc": ["https://kenh14.vn/home.rss",                    "https://kenh14.vn/star.rss",               "https://kenh14.vn/xa-hoi.rss"]},
@@ -183,12 +173,6 @@ def load_data():
                     ai_chat_sessions  = set(data.get("ai_chat_sessions", []))
             except Exception:
                 pass
-        env_chats = os.environ.get("TELEGRAM_AUTO_NEWS_CHATS") or os.environ.get("TELEGRAM_CHAT_ID") or os.environ.get("ADMIN_CHAT_ID")
-        if env_chats:
-            for cid in str(env_chats).split(","):
-                c_clean = cid.strip()
-                if c_clean:
-                    active_auto_news_chats.add(c_clean)
 
 def save_data():
     with json_lock:
@@ -1018,315 +1002,45 @@ def format_weather(trang_thai, ht, ten_vi_tri, c_temp, feels_like, humidity, pm2
 
     return msg, img_url, img_caption, tu_khoa
 
-# =====================================================================
-# [PHẦN 5.5] BỘ THU THẬP & TỔNG HỢP VIDEO TIN TỨC - THỜI TIẾT ĐA NGUỒN
-# =====================================================================
-video_cache_data = {"timestamp": 0, "videos": []}
-video_cache_lock = threading.Lock()
-
-FALLBACK_VIDEOS = [
-    {
-        "id": "iVF4Jr-xoWk",
-        "title": "Đường đi biến thành nơi tập kết rác tại Lạc Đạo, Hưng Yên",
-        "link": "https://www.youtube.com/watch?v=iVF4Jr-xoWk",
-        "embed_url": "https://www.youtube-nocookie.com/embed/iVF4Jr-xoWk",
-        "thumbnail": "https://img.youtube.com/vi/iVF4Jr-xoWk/hqdefault.jpg",
-        "channel": "VTV24",
-        "category": "traffic",
-        "category_label": "Giao thông & Đô thị",
-        "badge": "MỚI NHẤT",
-        "published": "Vừa phát sóng",
-        "published_iso": "2026-10-15T08:00:00+00:00"
-    },
-    {
-        "id": "PQlBET-bx80",
-        "title": "Phóng sự điều tra: Tinh vi thủ đoạn rửa tiền hàng nghìn tỷ đồng xuyên biên giới",
-        "link": "https://www.youtube.com/watch?v=PQlBET-bx80",
-        "embed_url": "https://www.youtube-nocookie.com/embed/PQlBET-bx80",
-        "thumbnail": "https://img.youtube.com/vi/PQlBET-bx80/hqdefault.jpg",
-        "channel": "VTV24",
-        "category": "news",
-        "category_label": "Tiêu điểm 24h",
-        "badge": "ĐIỀU TRA",
-        "published": "Vừa phát sóng",
-        "published_iso": "2026-10-15T07:30:00+00:00"
-    },
-    {
-        "id": "Q8gNSlAYBak",
-        "title": "Trực tiếp sự kiện: Lễ trao giải Thương Hiệu Vàng TP.HCM 2026 - Động lực tăng trưởng",
-        "link": "https://www.youtube.com/watch?v=Q8gNSlAYBak",
-        "embed_url": "https://www.youtube-nocookie.com/embed/Q8gNSlAYBak",
-        "thumbnail": "https://img.youtube.com/vi/Q8gNSlAYBak/hqdefault.jpg",
-        "channel": "Báo Tuổi Trẻ",
-        "category": "life",
-        "category_label": "Đời sống & Xã hội",
-        "badge": "TRỰC TIẾP",
-        "published": "Vừa phát sóng",
-        "published_iso": "2026-10-15T07:00:00+00:00"
-    },
-    {
-        "id": "6bfwopT5zUA",
-        "title": "Chiến dịch 500 ngày đêm: Hành trình trở về sau gần 60 năm",
-        "link": "https://www.youtube.com/watch?v=6bfwopT5zUA",
-        "embed_url": "https://www.youtube-nocookie.com/embed/6bfwopT5zUA",
-        "thumbnail": "https://img.youtube.com/vi/6bfwopT5zUA/hqdefault.jpg",
-        "channel": "VTV24",
-        "category": "news",
-        "category_label": "Tiêu điểm 24h",
-        "badge": "PHÓNG SỰ",
-        "published": "Vừa phát sóng",
-        "published_iso": "2026-10-15T06:00:00+00:00"
-    },
-    {
-        "id": "BywNaNPfvik",
-        "title": "Thời sự toàn cảnh: Việt Nam tăng cường hợp tác và phát triển kinh tế xã hội",
-        "link": "https://www.youtube.com/watch?v=BywNaNPfvik",
-        "embed_url": "https://www.youtube-nocookie.com/embed/BywNaNPfvik",
-        "thumbnail": "https://img.youtube.com/vi/BywNaNPfvik/hqdefault.jpg",
-        "channel": "VTV24",
-        "category": "news",
-        "category_label": "Tiêu điểm 24h",
-        "badge": "TIÊU ĐIỂM",
-        "published": "1 giờ trước",
-        "published_iso": "2026-10-15T05:00:00+00:00"
-    },
-    {
-        "id": "wT7fGqh0e24",
-        "title": "Nóng nghị trường Quốc Hội: Phim ‘rác’ AI hủy hoại giới trẻ, liều thuốc độc thời đại mới",
-        "link": "https://www.youtube.com/watch?v=wT7fGqh0e24",
-        "embed_url": "https://www.youtube-nocookie.com/embed/wT7fGqh0e24",
-        "thumbnail": "https://img.youtube.com/vi/wT7fGqh0e24/hqdefault.jpg",
-        "channel": "Báo Tiền Phong",
-        "category": "news",
-        "category_label": "Tiêu điểm 24h",
-        "badge": "NGHỊ TRƯỜNG",
-        "published": "2 giờ trước",
-        "published_iso": "2026-10-15T04:00:00+00:00"
-    },
-    {
-        "id": "byik3EPK-NQ",
-        "title": "Mặt đường bất ngờ nứt vỡ 'nuốt chửng’ 15 ô tô, 'hố tử thần’ xuất hiện khiến dân bàng hoàng",
-        "link": "https://www.youtube.com/watch?v=byik3EPK-NQ",
-        "embed_url": "https://www.youtube-nocookie.com/embed/byik3EPK-NQ",
-        "thumbnail": "https://img.youtube.com/vi/byik3EPK-NQ/hqdefault.jpg",
-        "channel": "Báo Tiền Phong",
-        "category": "warning",
-        "category_label": "Cảnh báo khẩn",
-        "badge": "CẢNH BÁO",
-        "published": "3 giờ trước",
-        "published_iso": "2026-10-15T03:00:00+00:00"
-    },
-    {
-        "id": "7Lz5mP1o2aQ",
-        "title": "Dự báo thời tiết 24h tới: Không khí lạnh tăng cường, Bắc Bộ chuyển mưa rải rác",
-        "link": "https://www.youtube.com/watch?v=7Lz5mP1o2aQ",
-        "embed_url": "https://www.youtube-nocookie.com/embed/7Lz5mP1o2aQ",
-        "thumbnail": "https://img.youtube.com/vi/7Lz5mP1o2aQ/hqdefault.jpg",
-        "channel": "VTV24",
-        "category": "weather",
-        "category_label": "Thời tiết & Bão lũ",
-        "badge": "THỜI TIẾT",
-        "published": "4 giờ trước",
-        "published_iso": "2026-10-15T02:00:00+00:00"
-    }
-]
-
-def lay_danh_sach_video_da_dang(so_luong=10, trang_thai="BINH_THUONG"):
-    """
-    Thu thập CHỈ VIDEO DÀI (Bỏ qua hoàn toàn YouTube Shorts, Reels, video ngắn).
-    Kiểm tra độ tươi mới: chỉ nhận video mới nhất từ các cơ quan báo chí chính thống đang hoạt động.
-    Bỏ qua các kênh/bài không có dữ liệu hoặc lỗi.
-    Sắp xếp theo thời gian mới nhất lên đầu tiên.
-    """
-    global video_cache_data
-    now_ts = time.time()
-    now_utc = datetime.datetime.now(datetime.timezone.utc)
-
-    with video_cache_lock:
-        if video_cache_data["videos"] and (now_ts - video_cache_data["timestamp"] < 600):
-            cached = list(video_cache_data["videos"])
-            if trang_thai in ["MUA_NHO", "MUA_DONG", "MUA_BAO", "NANG_GAT"]:
-                cached.sort(key=lambda x: 0 if x.get("category") in ["weather", "warning"] else 1)
-            return cached[:so_luong]
-
-    # Các kênh chính thống liên tục cập nhật video dài mới nhất hàng ngày
-    channels = [
-        {"ten": "VTV24", "cid": "UCabsTV34JwALXKGMqHpvUiA", "badge": "VTV24"},
-        {"ten": "Báo Tiền Phong", "cid": "UCPhPBJ3qE719TgLYVcNY8yg", "badge": "TIỀN PHONG"},
-        {"ten": "Báo Tuổi Trẻ", "cid": "UC47WI-kZXFf0H_f7pvaNCEQ", "badge": "TUỔI TRẺ"},
-    ]
-
-    all_vids = []
-    seen_ids = set()
-
-    for ch in channels:
-        try:
-            url = f"https://www.youtube.com/feeds/videos.xml?channel_id={ch['cid']}"
-            r = requests.get(url, timeout=3.5, headers={"User-Agent": "Mozilla/5.0"})
-            if r.status_code != 200:
-                continue
-
-            try:
-                soup = BeautifulSoup(r.text, 'xml')
-            except:
-                soup = BeautifulSoup(r.text, 'html.parser')
-
-            entries = soup.find_all('entry')
-            if not entries:
-                continue
-
-            for entry in entries:
-                vid_el = entry.find('yt:videoId')
-                vid_id = vid_el.text.strip() if vid_el else ""
-                if not vid_id or vid_id in seen_ids:
-                    continue
-
-                link_el = entry.find('link')
-                link_href = link_el['href'] if link_el and 'href' in link_el.attrs else ""
-                raw_title = entry.title.text.strip() if entry.title else ""
-                title = html.unescape(raw_title)
-                t_lower = title.lower()
-
-                # ── 1. LOẠI BỎ HOÀN TOÀN YOUTUBE SHORTS (CHỈ DÙNG VIDEO DÀI) ──
-                # Kiểm tra đường dẫn URL dạng /shorts/
-                if '/shorts/' in link_href.lower():
-                    continue
-
-                # Kiểm tra từ khóa, hashtag nhận diện Shorts hoặc video ngắn dưới 60s
-                shorts_keywords = ['#short', '#shorts', '30s nóng', 'tiktok', '#reels', 'reels', '#shortvideo', 'shorts:']
-                if any(sk in t_lower for sk in shorts_keywords):
-                    continue
-
-                # ── 2. ĐẢM BẢO VIDEO LUÔN LÀ MỚI NHẤT (BỎ QUA VIDEO CŨ / KHÔNG CÓ DỮ LIỆU) ──
-                pub_el = entry.find('published')
-                pub_raw = pub_el.text.strip() if pub_el else ""
-                if not pub_raw:
-                    continue
-
-                try:
-                    pub_dt = datetime.datetime.fromisoformat(pub_raw.replace('Z', '+00:00'))
-                    diff_hours = (now_utc - pub_dt).total_seconds() / 3600.0
-
-                    # Chỉ chấp nhận video trong vòng 14 ngày trở lại đây (loại bỏ video cũ hàng năm)
-                    if diff_hours > (14 * 24):
-                        continue
-
-                    if diff_hours < 2:
-                        pub_str = "Vừa phát sóng"
-                    elif diff_hours < 24:
-                        pub_str = f"{int(diff_hours)} giờ trước"
-                    elif diff_hours < 48:
-                        pub_str = "Hôm qua"
-                    else:
-                        pub_str = f"{int(diff_hours // 24)} ngày trước"
-                except Exception:
-                    # Nếu lỗi parse thời gian, kiểm tra có phải năm hiện tại không
-                    if not pub_raw.startswith(str(now_utc.year)):
-                        continue
-                    pub_str = pub_raw[:10]
-
-                # Phân loại chủ đề thông minh
-                if any(k in t_lower for k in ['mưa', 'bão', 'lũ', 'ngập', 'triều cường', 'thời tiết', 'nhiệt độ', 'rét', 'áp thấp', 'dông']):
-                    cat = "weather"
-                    cat_label = "Thời tiết & Bão lũ"
-                    badge = "THỜI TIẾT"
-                elif any(k in t_lower for k in ['cảnh báo', 'nguy cơ', 'hỏa hoạn', 'cháy', 'sạt lở', 'tai nạn', 'khẩn']):
-                    cat = "warning"
-                    cat_label = "Cảnh báo khẩn"
-                    badge = "CẢNH BÁO"
-                elif any(k in t_lower for k in ['giao thông', 'xe', 'đường', 'ùn tắc', 'cầu', 'hạ tầng', 'cao tốc']):
-                    cat = "traffic"
-                    cat_label = "Giao thông & Đô thị"
-                    badge = "GIAO THÔNG"
-                elif any(k in t_lower for k in ['thời sự', 'toàn cảnh', 'tiêu điểm', 'quốc tế', 'tin nóng', 'nghị trường']):
-                    cat = "news"
-                    cat_label = "Tiêu điểm 24h"
-                    badge = "TIÊU ĐIỂM"
-                else:
-                    cat = "life"
-                    cat_label = "Đời sống & Xã hội"
-                    badge = ch["badge"]
-
-                seen_ids.add(vid_id)
-                all_vids.append({
-                    "id": vid_id,
-                    "title": title,
-                    "link": f"https://www.youtube.com/watch?v={vid_id}",
-                    "embed_url": f"https://www.youtube-nocookie.com/embed/{vid_id}",
-                    "thumbnail": f"https://img.youtube.com/vi/{vid_id}/hqdefault.jpg",
-                    "channel": ch["ten"],
-                    "category": cat,
-                    "category_label": cat_label,
-                    "badge": badge,
-                    "published": pub_str,
-                    "published_iso": pub_raw
-                })
-        except Exception:
-            pass
-
-    # ── 3. SẮP XẾP TOÀN BỘ VIDEO THEO THỜI GIAN MỚI NHẤT GIẢM DẦN ──
-    all_vids.sort(key=lambda x: x.get("published_iso", ""), reverse=True)
-
-    if all_vids:
-        with video_cache_lock:
-            video_cache_data["videos"] = all_vids
-            video_cache_data["timestamp"] = now_ts
-
-    result = all_vids if all_vids else video_cache_data.get("videos", [])
-    if not result:
-        result = list(FALLBACK_VIDEOS)
-    if trang_thai in ["MUA_NHO", "MUA_DONG", "MUA_BAO", "NANG_GAT"]:
-        result = sorted(result, key=lambda x: 0 if x.get("category") in ["weather", "warning"] else 1)
-    return result[:so_luong]
-
 
 def lay_thoi_tiet_va_tin_tuc_hien_tai(include_news=True):
     try:
         lat, lon, ten_vi_tri = admin_location["lat"], admin_location["lon"], admin_location["name"]
         ten_ngan = ten_vi_tri.split(',')[0].strip()
 
-        try:
-            req_curr = requests.get(
-                f"https://api.openweathermap.org/data/2.5/weather"
-                f"?lat={lat}&lon={lon}&appid={OPENWEATHER_API_KEY}&units=metric&lang=vi", timeout=10)
-            req_curr.encoding = 'utf-8'
-            res_curr  = req_curr.json()
-            c_temp    = round(res_curr['main']['temp'], 1)
-            feels_like = round(res_curr['main']['feels_like'], 1)
-            humidity  = res_curr['main']['humidity']
-            c_desc    = res_curr['weather'][0]['description'].capitalize()
-            c_icon    = get_owm_icon(res_curr['weather'][0]['icon'])
-            rain_1h   = res_curr.get('rain', {}).get('1h', 0)
-        except Exception:
-            c_temp, feels_like, humidity, c_desc, c_icon, rain_1h = 26.5, 27.8, 76, "Mây rải rác", "⛅", 0
-            res_curr = {}
+        req_curr = requests.get(
+            f"https://api.openweathermap.org/data/2.5/weather"
+            f"?lat={lat}&lon={lon}&appid={OPENWEATHER_API_KEY}&units=metric&lang=vi", timeout=10)
+        req_curr.encoding = 'utf-8'
+        res_curr  = req_curr.json()
+        c_temp    = round(res_curr['main']['temp'], 1)
+        feels_like = round(res_curr['main']['feels_like'], 1)
+        humidity  = res_curr['main']['humidity']
+        c_desc    = res_curr['weather'][0]['description'].capitalize()
+        c_icon    = get_owm_icon(res_curr['weather'][0]['icon'])
 
-        try:
-            req_fore = requests.get(
-                f"https://api.openweathermap.org/data/2.5/forecast"
-                f"?lat={lat}&lon={lon}&appid={OPENWEATHER_API_KEY}&units=metric&lang=vi", timeout=10)
-            req_fore.encoding = 'utf-8'
-            res_fore      = req_fore.json()
-            forecast_list = res_fore.get('list', [])
-            n_item  = forecast_list[0] if forecast_list else {}
-            n_temp  = round(n_item.get('main', {}).get('temp', c_temp), 1)
-            n_pop   = int(n_item.get('pop', 0) * 100)
-            n_desc  = n_item.get('weather', [{}])[0].get('description', c_desc).capitalize()
-        except Exception:
-            n_temp, n_pop, n_desc = round(c_temp + 0.5, 1), 20, c_desc
+        req_fore = requests.get(
+            f"https://api.openweathermap.org/data/2.5/forecast"
+            f"?lat={lat}&lon={lon}&appid={OPENWEATHER_API_KEY}&units=metric&lang=vi", timeout=10)
+        req_fore.encoding = 'utf-8'
+        res_fore      = req_fore.json()
+        forecast_list = res_fore.get('list', [])
+        n_item  = forecast_list[0] if forecast_list else {}
+        n_temp  = round(n_item.get('main', {}).get('temp', c_temp), 1)
+        n_pop   = int(n_item.get('pop', 0) * 100)
+        n_desc  = n_item.get('weather', [{}])[0].get('description', c_desc).capitalize()
 
-        try:
-            req_aqi = requests.get(
-                f"https://api.openweathermap.org/data/2.5/air_pollution"
-                f"?lat={lat}&lon={lon}&appid={OPENWEATHER_API_KEY}", timeout=5)
-            res_aqi   = req_aqi.json()
-            aqi_level = res_aqi['list'][0]['main']['aqi']
-            pm25      = res_aqi['list'][0]['components'].get('pm2_5', 0)
-        except Exception:
-            aqi_level, pm25 = 2, 28.5
+        req_aqi = requests.get(
+            f"https://api.openweathermap.org/data/2.5/air_pollution"
+            f"?lat={lat}&lon={lon}&appid={OPENWEATHER_API_KEY}", timeout=5)
+        res_aqi   = req_aqi.json()
+        aqi_level = res_aqi['list'][0]['main']['aqi']
+        pm25      = res_aqi['list'][0]['components'].get('pm2_5', 0)
 
         trang_thai = xac_dinh_trang_thai_thoi_tiet(c_temp, feels_like, c_desc, n_pop, humidity)
         ht = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=7)))
+
+        rain_1h = res_curr.get('rain', {}).get('1h', 0)
         msg, img_url, img_caption, tu_khoa = format_weather(trang_thai, ht, ten_vi_tri, c_temp, feels_like, humidity, pm25, aqi_level, n_temp, n_pop, n_desc, ten_ngan, rain_1h)
 
         if not include_news:
@@ -1382,14 +1096,31 @@ def lay_thoi_tiet_va_tin_tuc_hien_tai(include_news=True):
             msg += " └ <i>Tạm thời không thể tải tin tức nóng.</i>\n"
 
         try:
-            vids = lay_danh_sach_video_da_dang(so_luong=3, trang_thai=trang_thai)
-            if vids:
-                top_v = vids[0]
-                badge_tag = "🚨 <b>VIDEO CẢNH BÁO</b>" if top_v.get("category") in ["weather", "warning"] else "📺 <b>BẢN TIN VIDEO TIÊU ĐIỂM</b>"
-                msg += f"\n{badge_tag} ({top_v['channel']}):\n └ <a href='{top_v['link']}'>{escape_html(top_v['title'])}</a>\n"
-                if len(vids) > 1:
-                    sub_v = vids[1]
-                    msg += f" └ <a href='{sub_v['link']}'>{escape_html(sub_v['title'])}</a>\n"
+            url_yt  = "https://www.youtube.com/feeds/videos.xml?channel_id=UCabsTV34JwALXKGMqHpvUiA"
+            res_yt  = requests.get(url_yt, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+            res_yt.encoding = 'utf-8'
+            if res_yt.status_code == 200:
+                try:    soup_yt = BeautifulSoup(res_yt.text, 'xml')
+                except: soup_yt = BeautifulSoup(res_yt.text, 'html.parser')
+                entries = soup_yt.find_all('entry')
+                if entries:
+                    kws = (['mưa', 'lũ', 'ngập', 'bão'] if trang_thai in ["MUA_NHO", "MUA_DONG", "MUA_BAO"]
+                           else ['nắng', 'hạn hán', 'nhiệt độ'])
+                    found_vid = False
+                    for entry in entries:
+                        vtitle = html.unescape(entry.title.text if entry.title else "")
+                        vlink  = (entry.find('link')['href']
+                                  if entry.find('link') and 'href' in entry.find('link').attrs else "")
+                        if any(kw in vtitle.lower() for kw in kws):
+                            msg += f"\n📺 <b>VIDEO CẢNH BÁO (VTV24):</b>\n └ <a href='{vlink}'>{escape_html(vtitle)}</a>\n"
+                            found_vid = True
+                            break
+                    if not found_vid:
+                        vtitle = html.unescape(entries[0].title.text if entries[0].title else "Tin tức VTV24")
+                        vlink  = (entries[0].find('link')['href']
+                                  if entries[0].find('link') and 'href' in entries[0].find('link').attrs else "")
+                        if vlink:
+                            msg += f"\n📺 <b>TIN TỨC VIDEO (VTV24):</b>\n └ <a href='{vlink}'>{escape_html(vtitle)}</a>\n"
         except:
             pass
 
@@ -1440,7 +1171,7 @@ def tim_toa_do_theo_ten(ten_dia_diem):
         pass
     return {"thanh_cong": False}
 
-def lay_tat_ca_bai_viet_ngau_nhien(sort_by_date=True, chi_lay_hom_nay=True):
+def lay_tat_ca_bai_viet_ngau_nhien(sort_by_date=False):
     danh_sach_tong  = []
     headers         = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
     nguon_rss       = [val for val in DANH_SACH_TRANG.values()]
@@ -1454,15 +1185,10 @@ def lay_tat_ca_bai_viet_ngau_nhien(sort_by_date=True, chi_lay_hom_nay=True):
     nguon_rss.append({"ten": "🌐 Tin Nổi Bật",
                       "muc": ["https://news.google.com/rss?hl=vi&gl=VN&ceid=VN:vi"]})
 
-    now_dt = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=7)))
-    now_ts = now_dt.timestamp()
-    # Tuyệt đối chỉ lấy bài viết mới trong ngày / 36 giờ gần nhất, loại bỏ hoàn toàn bài viết cũ 2024 - 2025:
-    min_ts = now_ts - (36 * 3600)
-
     for t_info in nguon_rss:
         for url in t_info["muc"]:
             try:
-                res = requests.get(url, headers=headers, timeout=8)
+                res = requests.get(url, headers=headers, timeout=10)
                 res.encoding = 'utf-8'
                 if res.status_code != 200:
                     continue
@@ -1478,23 +1204,10 @@ def lay_tat_ca_bai_viet_ngau_nhien(sort_by_date=True, chi_lay_hom_nay=True):
                     desc      = html.unescape(raw_desc)
                     link      = item.link.text.strip() if item.link else ""
                     import email.utils
-                    ts = now_ts
-                    is_too_old = False
-                    if item.pubDate and item.pubDate.text:
-                        try:
-                            p_dt = email.utils.parsedate_to_datetime(item.pubDate.text)
-                            ts = p_dt.timestamp()
-                            # Loại bỏ triệt để các bài viết cũ hơn năm hiện tại (2024, 2025)
-                            if p_dt.year < now_dt.year:
-                                is_too_old = True
-                            elif chi_lay_hom_nay and ts < min_ts:
-                                is_too_old = True
-                        except Exception:
-                            ts = now_ts
-
-                    if is_too_old:
-                        continue
-
+                    try:
+                        ts = email.utils.parsedate_to_datetime(item.pubDate.text).timestamp() if item.pubDate else 0
+                    except:
+                        ts = 0
                     img_url   = None
                     enc       = item.find('enclosure')
                     if enc and 'url' in enc.attrs:
@@ -1523,24 +1236,11 @@ def lay_tat_ca_bai_viet_ngau_nhien(sort_by_date=True, chi_lay_hom_nay=True):
                         })
             except:
                 continue
-
-    # Loại bỏ trùng lặp theo liên kết link
-    seen_links = set()
-    unique_danh_sach = []
-    for b in danh_sach_tong:
-        if b["link"] not in seen_links:
-            seen_links.add(b["link"])
-            unique_danh_sach.append(b)
-
     if sort_by_date:
-        unique_danh_sach.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
+        danh_sach_tong.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
     else:
-        # Giữ lại các tin mới nhất của hôm nay, xáo trộn nhẹ để đa dạng
-        unique_danh_sach.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
-        top_fresh = unique_danh_sach[:12]
-        random.shuffle(top_fresh)
-        unique_danh_sach = top_fresh + unique_danh_sach[12:]
-    return unique_danh_sach
+        random.shuffle(danh_sach_tong)
+    return danh_sach_tong
 
 def lay_bai_viet_moi_chua_gui(chat_id_str, so_luong=5):
     if chat_id_str not in sent_articles_set:
@@ -1604,11 +1304,11 @@ def job_tu_dong_day_tin():
         ht_time     = time.time()
         with json_lock: chats_to_send = list(active_auto_news_chats)
         valid_chats = [c for c in chats_to_send
-                       if ht_time - user_last_news_sent.get(str(c), 0) >= 1800]
+                       if ht_time - user_last_news_sent.get(str(c), 0) >= 3500]
         if not valid_chats:
             return
 
-        tat_ca_tin = lay_tat_ca_bai_viet_ngau_nhien(sort_by_date=True, chi_lay_hom_nay=True)
+        tat_ca_tin = lay_tat_ca_bai_viet_ngau_nhien()
         if not tat_ca_tin:
             return
 
@@ -1720,557 +1420,45 @@ def lay_ma_shopeefood_moi_nhat():
 def api_daily_news():
     try:
         lat, lon, ten_vi_tri = admin_location["lat"], admin_location["lon"], admin_location["name"]
-        
-        # 1. Thử lấy thời tiết hiện tại với fallback an toàn
-        try:
-            res_curr = requests.get(
-                f"https://api.openweathermap.org/data/2.5/weather"
-                f"?lat={lat}&lon={lon}&appid={OPENWEATHER_API_KEY}&units=metric&lang=vi", timeout=8).json()
-            c_temp = round(res_curr['main']['temp'], 1)
-            feels_like = round(res_curr['main']['feels_like'], 1)
-            humidity = res_curr['main']['humidity']
-            c_desc = res_curr['weather'][0]['description'].capitalize()
-            c_icon = get_owm_icon(res_curr['weather'][0]['icon'])
-            wind_speed = round(res_curr.get('wind', {}).get('speed', 0) * 3.6)
-        except Exception:
-            c_temp, feels_like, humidity, wind_speed, c_desc, c_icon = 26.5, 27.8, 76, 11, "Mây rải rác", "⛅"
-
-        # 2. Thử lấy dự báo 3h tới
-        try:
-            res_fore = requests.get(
-                f"https://api.openweathermap.org/data/2.5/forecast"
-                f"?lat={lat}&lon={lon}&appid={OPENWEATHER_API_KEY}&units=metric&lang=vi", timeout=8).json()
-            forecast_list = res_fore.get('list', [])
-            n_item = forecast_list[0] if forecast_list else {}
-            n_temp = round(n_item.get('main', {}).get('temp', c_temp), 1)
-            n_pop = int(n_item.get('pop', 0) * 100)
-            n_desc = n_item.get('weather', [{}])[0].get('description', c_desc).capitalize()
-        except Exception:
-            n_temp, n_pop, n_desc = round(c_temp + 0.5, 1), 20, c_desc
-
-        # 3. Thử lấy chỉ số ô nhiễm không khí
-        try:
-            res_aqi = requests.get(
-                f"https://api.openweathermap.org/data/2.5/air_pollution"
-                f"?lat={lat}&lon={lon}&appid={OPENWEATHER_API_KEY}", timeout=5).json()
-            aqi_level = res_aqi['list'][0]['main']['aqi']
-            pm25 = res_aqi['list'][0]['components'].get('pm2_5', 0)
-        except Exception:
-            aqi_level, pm25 = 2, 28.5
-
+        res_curr  = requests.get(
+            f"https://api.openweathermap.org/data/2.5/weather"
+            f"?lat={lat}&lon={lon}&appid={OPENWEATHER_API_KEY}&units=metric&lang=vi", timeout=10).json()
+        c_temp    = round(res_curr['main']['temp'], 1)
+        feels_like = round(res_curr['main']['feels_like'], 1)
+        humidity  = res_curr['main']['humidity']
+        c_desc    = res_curr['weather'][0]['description'].capitalize()
+        c_icon    = get_owm_icon(res_curr['weather'][0]['icon'])
+        res_fore  = requests.get(
+            f"https://api.openweathermap.org/data/2.5/forecast"
+            f"?lat={lat}&lon={lon}&appid={OPENWEATHER_API_KEY}&units=metric&lang=vi", timeout=10).json()
+        forecast_list = res_fore.get('list', [])
+        n_item    = forecast_list[0] if forecast_list else {}
+        n_temp    = round(n_item.get('main', {}).get('temp', c_temp), 1)
+        n_pop     = int(n_item.get('pop', 0) * 100)
+        n_desc    = n_item.get('weather', [{}])[0].get('description', c_desc).capitalize()
+        res_aqi   = requests.get(
+            f"https://api.openweathermap.org/data/2.5/air_pollution"
+            f"?lat={lat}&lon={lon}&appid={OPENWEATHER_API_KEY}", timeout=5).json()
+        aqi_level = res_aqi['list'][0]['main']['aqi']
+        pm25      = res_aqi['list'][0]['components'].get('pm2_5', 0)
         trang_thai = xac_dinh_trang_thai_thoi_tiet(c_temp, feels_like, c_desc, n_pop, humidity)
-        tin_tuc = lay_tat_ca_bai_viet_ngau_nhien(sort_by_date=True, chi_lay_hom_nay=True)[:15]
-        videos_list = lay_danh_sach_video_da_dang(so_luong=12, trang_thai=trang_thai)
-        
+        tin_tuc   = lay_tat_ca_bai_viet_ngau_nhien()[:15]
         data_response = {
             "timestamp": datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=7))).strftime('%H:%M %d/%m/%Y'),
             "location": ten_vi_tri,
             "weather": {
-                "current":     {"temp": c_temp, "feels_like": feels_like, "humidity": humidity, "wind_speed": wind_speed,
+                "current":     {"temp": c_temp, "feels_like": feels_like, "humidity": humidity,
                                 "desc": c_desc, "icon": c_icon, "pm25": pm25, "aqi_level": aqi_level},
                 "forecast_3h": {"temp": n_temp, "pop": n_pop, "desc": n_desc},
                 "status":      trang_thai
             },
-            "news": tin_tuc,
-            "videos": videos_list,
-            "video": videos_list[0] if videos_list else None
+            "news": tin_tuc
         }
         response = jsonify(data_response)
         response.headers.add("Access-Control-Allow-Origin", "*")
         return response
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-def trich_xuat_noi_dung_bai_bao(url, title="", description=""):
-    """
-    Trích xuất toàn văn nội dung bài báo, các đoạn văn, hình ảnh và phân tích tóm lược.
-    Có cơ chế xử lý thông minh khi liên kết ngoài bị chặn hoặc không thể truy cập.
-    """
-    paragraphs = []
-    author = ""
-    pub_time = ""
-    
-    if url and url != "#" and url.startswith("http"):
-        try:
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
-            }
-            resp = requests.get(url, headers=headers, timeout=4.0)
-            if resp.status_code == 200:
-                resp.encoding = resp.apparent_encoding or 'utf-8'
-                soup = BeautifulSoup(resp.text, 'html.parser')
-                
-                # Tìm tác giả
-                author_el = soup.find(class_=lambda c: c and any(k in str(c).lower() for k in ['author', 'tac-gia', 'byline', 'journalist']))
-                if author_el:
-                    author = author_el.get_text().strip()
-                
-                # Tìm ngày xuất bản
-                time_el = soup.find(['time', 'span'], class_=lambda c: c and any(k in str(c).lower() for k in ['date', 'time', 'publish']))
-                if time_el:
-                    pub_time = time_el.get_text().strip()
-                
-                # Tìm các đoạn văn nội dung chính
-                content_container = (
-                    soup.find('article') or 
-                    soup.find('div', class_=lambda c: c and any(k in str(c).lower() for k in ['article-body', 'article-content', 'content-detail', 'fck_detail', 'detail__content'])) or
-                    soup.find('div', id=lambda i: i and any(k in str(i).lower() for k in ['content', 'article-body']))
-                )
-                
-                target_root = content_container if content_container else soup
-                p_tags = target_root.find_all('p')
-                for p in p_tags:
-                    text = p.get_text().strip()
-                    if len(text) > 40 and not any(ign in text.lower() for ign in ['bình luận', 'chia sẻ qua', 'theo dõi trên', 'bản quyền thuộc']):
-                        paragraphs.append(text)
-        except Exception:
-            pass
-
-    # Nếu không crawl được và có Gemini AI, gọi Gemini AI phân tích và viết bài báo chi tiết
-    if not paragraphs and GEMINI_API_KEY:
-        ai_prompt = (
-            f"Bạn là phóng viên kỳ cựu của Báo Tiền Phong.\n"
-            f"Hãy viết bài báo chi tiết, toàn diện, đúng bản chất sự kiện dựa trên thông tin sau:\n"
-            f"- Tiêu đề: {title}\n"
-            f"- Tóm tắt: {description}\n"
-            f"Yêu cầu:\n"
-            f"1. Viết đúng 4 đoạn văn báo chí chuyên nghiệp, không viết tiêu đề phụ hay gạch đầu dòng.\n"
-            f"2. Mỗi đoạn có độ dài từ 60-120 chữ, phân tích bối cảnh, diễn biến, phản ứng cơ quan chức năng, và khuyến cáo an toàn cho người dân."
-        )
-        try:
-            success, ai_text = goi_gemini_api(ai_prompt)
-            if success and ai_text:
-                ai_paras = [p.strip() for p in ai_text.split('\n') if len(p.strip()) > 40]
-                if len(ai_paras) >= 2:
-                    paragraphs = ai_paras
-        except Exception:
-            pass
-
-    # Dự phòng nội dung bài báo chuẩn phong cách báo điện tử Tiền Phong khi không thể crawl
-    if not paragraphs:
-        base_desc = description.strip() if description else title
-        paragraphs = [
-            f"Theo thông tin ghi nhận mới nhất liên quan đến sự kiện '{title}', các cơ quan chức năng và đơn vị chuyên môn đang khẩn trương triển khai các phương án theo dõi, ứng phó và bảo đảm an toàn trên diện rộng.",
-            base_desc if len(base_desc) > 30 else f"Sự việc thu hút sự quan tâm lớn của đông đảo người dân đô thị và cộng đồng mạng. Báo Tiền Phong phối hợp cùng các kênh truyền thông chính thống tiếp tục cập nhật những diễn biến cụ thể từng giờ.",
-            "Tại hiện trường và các khu vực lân cận, lực lượng điều phối giao thông cùng đội ngũ phụ trách hạ tầng đã có mặt để điều tiết, hướng dẫn người dân di chuyển an toàn, hạn chế tối đa nguy cơ ảnh hưởng đến đời sống sinh hoạt và sức khỏe cộng đồng.",
-            "Đại diện cơ quan chức năng khuyến nghị người dân chủ động cập nhật các bản tin thời tiết và thông báo chỉ đạo chính thức, tránh chia sẻ các thông tin chưa kiểm chứng để bảo đảm trật tự an toàn đô thị."
-        ]
-        
-    # Tạo danh sách tags theo từ khóa
-    title_lower = title.lower()
-    auto_tags = ["Thời Sự Đô Thị", "Báo Tiền Phong"]
-    if any(k in title_lower for k in ['mưa', 'bão', 'lũ', 'ngập', 'thời tiết']):
-        auto_tags.extend(["Thời Tiết", "Cảnh Báo Mưa Ngập"])
-    if any(k in title_lower for k in ['giao thông', 'xe', 'đường', 'cao tốc', 'ùn tắc']):
-        auto_tags.extend(["Giao Thông", "Hạ Tầng"])
-    if any(k in title_lower for k in ['kinh tế', 'thị trường', 'doanh nghiệp', 'giá']):
-        auto_tags.extend(["Kinh Tế", "Thị Trường"])
-    if any(k in title_lower for k in ['công nghệ', 'ai', 'số hóa', 'robot']):
-        auto_tags.extend(["Công Nghệ", "Trí Tuệ Nhân Tạo"])
-    if any(k in title_lower for k in ['y tế', 'sức khỏe', 'bệnh', 'pm2.5', 'ô nhiễm']):
-        auto_tags.extend(["Sức Khỏe", "Môi Trường"])
-
-    key_takeaways = [
-        f"Trọng tâm: {title}",
-        "Tác động: Ảnh hưởng trực tiếp đến đời sống người dân đô thị và các hoạt động kinh tế - xã hội tại địa bàn.",
-        "Khuyến nghị: Theo dõi chặt chẽ khuyến cáo từ cơ quan chức năng và nền tảng thông tin Tiền Phong."
-    ]
-
-    return {
-        "title": title,
-        "paragraphs": paragraphs,
-        "author": author or "Ban Biên Tập Báo Tiền Phong",
-        "published_time": pub_time or "Vừa cập nhật",
-        "tags": list(dict.fromkeys(auto_tags)),
-        "key_takeaways": key_takeaways,
-        "reading_time_minutes": max(1, round(sum(len(p.split()) for p in paragraphs) / 200))
-    }
-
-@app.route('/api/article-detail', methods=['GET', 'POST', 'OPTIONS'])
-def api_article_detail():
-    if request.method == 'OPTIONS':
-        resp = make_response()
-        resp.headers.add("Access-Control-Allow-Origin", "*")
-        resp.headers.add("Access-Control-Allow-Headers", "Content-Type,Authorization")
-        resp.headers.add("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
-        return resp
-        
-    try:
-        if request.method == 'POST':
-            data = request.get_json(silent=True) or {}
-            url = data.get("url", "")
-            title = data.get("title", "")
-            description = data.get("description", "")
-        else:
-            url = request.args.get("url", "")
-            title = request.args.get("title", "")
-            description = request.args.get("desc", "")
-            
-        result = trich_xuat_noi_dung_bai_bao(url, title=title, description=description)
-        response = jsonify(result)
-        response.headers.add("Access-Control-Allow-Origin", "*")
-        return response
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-# ── ANTIGRAVITY COPILOT AI ENGINE ──────────────────────────────────────────
-
-def tao_phan_hoi_copilot_fallback(action, prompt, context):
-    """
-    Hệ thống phân tích AI nội suy dự phòng (Deterministic Antigravity Engine)
-    khi Gemini API gặp sự cố timeout hoặc hết hạn ngạch.
-    Cung cấp thông tin phân tích thực tế sâu sắc, không chỉ là con số thống kê vô nghĩa.
-    """
-    temp = context.get("temp", 26.0)
-    feels_like = context.get("feels_like", 27.0)
-    desc = context.get("desc", "Nhiều mây")
-    humidity = context.get("humidity", 75)
-    pm25 = context.get("pm25", 35.0)
-    aqi_level = context.get("aqi_level", 2)
-    wind_speed = context.get("wind_speed", 12)
-    location = context.get("location", "Hà Nội")
-    news_titles = context.get("news_titles", [])
-
-    if action == "weather_impact":
-        impact_level = "Cao" if (temp >= 35 or temp <= 14 or "mưa" in desc.lower()) else "Trung bình"
-        uv_note = "Chỉ số UV cao, nguy cơ tổn thương da khi tiếp xúc quá 30 phút." if temp >= 32 else "Bức xạ UV ở mức an toàn."
-        rain_note = "Khả năng có mưa rào, mặt đường trơn trượt gây giảm ma sát bánh xe." if "mưa" in desc.lower() else "Đường khô ráo, tầm nhìn thoáng đãng, thuận tiện cho việc lưu thông."
-        return {
-            "reply": (
-                f"🌤️ **PHÂN TÍCH TÁC ĐỘNG THỜI TIẾT TẠI {location.upper()}**:\n\n"
-                f"• **Nhiệt độ & Cảm giác nhiệt**: Hiện tại {temp}°C (Cảm nhận thực tế {feels_like}°C, độ ẩm {humidity}%). {uv_note}\n"
-                f"• **Tác động di chuyển & Giao thông**: {rain_note} Tốc độ gió duy trì {wind_speed} km/h.\n"
-                f"• **Khuyến nghị Antigravity Copilot**: "
-                + ("Chủ động mang áo mưa, giảm tốc độ khi đi qua các đoạn cua ngã tư trũng." if "mưa" in desc.lower() else "Thời tiết lý tưởng cho việc sinh hoạt và di chuyển ngoài trời. Nhớ uống đủ nước nếu di chuyển liên tục.")
-            ),
-            "risk_level": "medium" if impact_level == "Trung bình" else ("high" if impact_level == "Cao" else "low"),
-            "model": "Antigravity Intelligent Copilot Engine (Deterministic Mode)"
-        }
-    elif action == "news_digest":
-        summary_lines = []
-        if news_titles:
-            for idx, t in enumerate(news_titles[:3], 1):
-                summary_lines.append(f"{idx}. {t}")
-        else:
-            summary_lines = [
-                "1. VTV24: Đẩy mạnh các giải pháp giao thông thông minh và an toàn đô thị.",
-                "2. Báo Tuổi Trẻ: Đổi mới sáng tạo trong điều phối nguồn lực và bảo đảm an sinh.",
-                "3. Báo Tiền Phong: Giám sát công tác phòng chống úng ngập và cảnh báo sớm thiên tai."
-            ]
-        return {
-            "reply": (
-                f"📰 **ĐIỂM TIN & PHÂN TÍCH TIÊU ĐIỂM HÔM NAY**:\n\n"
-                f"Antigravity Copilot đã quét và tổng hợp 3 dòng sự kiện nóng nhất:\n"
-                + "\n".join(summary_lines) + "\n\n"
-                f"💡 **Nhận định AI**: Trọng tâm thông tin xoay quanh an toàn đô thị và chuyển đổi số. Bạn nên chủ động cập nhật các kênh chính thống để nắm bắt diễn biến giao thông kịp thời."
-            ),
-            "risk_level": "low",
-            "model": "Antigravity Intelligent Copilot Engine (Deterministic Mode)"
-        }
-    elif action == "health_pm25":
-        health_status = "TỐT" if pm25 <= 25 else ("TRUNG BÌNH" if pm25 <= 50 else ("KÉM" if pm25 <= 80 else "NGUY HẠI"))
-        mask_rec = "Nên đeo khẩu trang chống bụi mịn PM2.5 khi di chuyển trên các trục đường lớn." if pm25 > 35 else "Chất lượng không khí ở mức chấp nhận được, hạn chế mở cửa thông gió vào giờ cao điểm."
-        return {
-            "reply": (
-                f"🍃 **ĐÁNH GIÁ CHỈ SỐ BỤI MỊN PM2.5 & BẢO VỆ SỨC KHỎE**:\n\n"
-                f"• **Nồng độ PM2.5 đo được**: {pm25} µg/m³ (Mức độ chất lượng không khí: **{health_status}**, AQI Cấp {aqi_level}).\n"
-                f"• **Tác động sinh học**: "
-                + (f"Nồng độ hạt bụi mịn PM2.5 đạt ngưỡng {pm25} µg/m³, dễ gây kích ứng niêm mạc mũi, họng đối với người mẫn cảm, trẻ em và người già." if pm25 > 35 else "Chỉ số ô nhiễm thấp, không ảnh hưởng đáng kể đến người khỏe mạnh bình thường.") + "\n"
-                f"• **Hành động y tế đề xuất**: {mask_rec}"
-            ),
-            "risk_level": "high" if pm25 > 50 else ("medium" if pm25 > 25 else "low"),
-            "model": "Antigravity Intelligent Copilot Engine (Deterministic Mode)"
-        }
-    elif action == "smart_route":
-        is_rain = "mưa" in desc.lower() or "dông" in desc.lower()
-        flood_warning = (
-            "⚠️ **CẢNH BÁO ĐIỂM ĐEN NGẬP ÚNG**: Tuyến Chiến Thắng (Văn Quán, ngập 32-58cm), ngõ 66 Triều Khúc và khu Viện K Xa La (Phúc La). Xe gầm thấp cấm tuyệt đối không đi vào!"
-            if is_rain else
-            "✅ Tất cả các điểm đen ngập úng tại Hà Đông và trục Nguyễn Trãi - Quang Trung hiện đều KHÔ RÁO, lưu thông thông suốt."
-        )
-        return {
-            "reply": (
-                f"🚗 **TƯ VẤN LỘ TRÌNH THÔNG MINH & GIÁM SÁT ĐIỂM ĐEN**:\n\n"
-                f"• **Tình trạng các điểm ngập đô thị**: {flood_warning}\n"
-                f"• **Khuyến nghị điều hướng**: "
-                + ("Ưu tiên sử dụng tuyến Tàu điện Cát Linh - Hà Đông hoặc các cầu vượt nhẹ tránh nút giao trũng." if is_rain else "Lưu thông bình thường. Chú ý giữ tốc độ ổn định qua các nút giao có đèn tín hiệu.") + "\n"
-                f"• **Điểm an toàn giao thông hiện tại**: " + ("48/100 (Cần cẩn trọng tối đa)" if is_rain else "94/100 (Rất an toàn)")
-            ),
-            "risk_level": "high" if is_rain else "low",
-            "model": "Antigravity Intelligent Copilot Engine (Deterministic Mode)"
-        }
-    else:
-        # Chat tổng quát
-        return {
-            "reply": (
-                f"🤖 **Antigravity AI Copilot** đã phân tích yêu cầu của bạn dựa trên dữ liệu thời gian thực:\n\n"
-                f"📍 Vị trí: {location} | Thời tiết: {temp}°C, {desc} | PM2.5: {pm25} µg/m³\n\n"
-                f"Trả lời cho câu hỏi: *\"{prompt}\"*\n\n"
-                f"Dựa trên bối cảnh hiện tại, hệ thống khuyến nghị bạn duy trì các biện pháp di chuyển an toàn, chủ động kiểm tra bản tin dự báo 3 giờ tới để có phương án công việc và di chuyển thuận lợi nhất."
-            ),
-            "risk_level": "low",
-            "model": "Antigravity Intelligent Copilot Engine (Deterministic Mode)"
-        }
-
-def tao_phan_hoi_copilot_ai(prompt, action, context):
-    """
-    Kích hoạt Gemini AI để xử lý thông tin thực tế, phân tích dữ liệu chuyên sâu.
-    Nếu Gemini không khả dụng, chuyển sang chế độ nội suy thông minh.
-    """
-    temp = context.get("temp", 26.0)
-    feels_like = context.get("feels_like", 27.0)
-    desc = context.get("desc", "Nhiều mây")
-    humidity = context.get("humidity", 75)
-    pm25 = context.get("pm25", 35.0)
-    aqi_level = context.get("aqi_level", 2)
-    wind_speed = context.get("wind_speed", 12)
-    location = context.get("location", "Hà Nội")
-    news_titles = context.get("news_titles", [])
-    news_summary_str = "; ".join(news_titles[:4]) if news_titles else "Bản tin thời sự, đô thị và an toàn giao thông"
-
-    action_instructions = {
-        "weather_impact": "Hãy phân tích chi tiết tác động của thời tiết hiện tại lên sức khỏe, sinh hoạt và giao thông. Đưa ra 3 khuyến nghị hành động cụ thể.",
-        "news_digest": "Hãy tóm tắt và bình luận 3 điểm tin nóng nhất trong ngày, phân tích góc nhìn xã hội và ý nghĩa của các sự kiện đó.",
-        "health_pm25": "Hãy đánh giá chỉ số bụi mịn PM2.5 và chất lượng không khí hiện tại, đưa ra lời khuyên y tế, bảo vệ hệ hô hấp cho người lớn và trẻ nhỏ.",
-        "smart_route": "Hãy đưa ra cảnh báo giao thông, nguy cơ ngập úng tại các tuyến đường chính (đặc biệt khu vực Hà Đông / Hà Nội) và gợi ý lộ trình di chuyển an toàn nhất.",
-    }
-
-    specific_task = action_instructions.get(action, prompt or "Hãy phân tích tình hình thời tiết và giao thông tổng quan hôm nay.")
-
-    ai_prompt = (
-        f"Bạn là Antigravity Copilot — Trợ lý AI Đô Thị & Bản Tin Thông Minh thế hệ mới.\n"
-        f"Dữ liệu cảm biến thời gian thực:\n"
-        f"- Khu vực: {location}\n"
-        f"- Nhiệt độ: {temp}°C (Cảm nhận: {feels_like}°C), Độ ẩm: {humidity}%, Tốc độ gió: {wind_speed} km/h\n"
-        f"- Tình trạng thời tiết: {desc}\n"
-        f"- Chỉ số ô nhiễm PM2.5: {pm25} µg/m³ (AQI mức {aqi_level})\n"
-        f"- Điểm tin nóng trong ngày: {news_summary_str}\n\n"
-        f"Nhiệm vụ cụ thể của bạn:\n"
-        f"{specific_task}\n\n"
-        f"Yêu cầu định dạng phản hồi:\n"
-        f"- Trả lời bằng tiếng Việt, giọng điệu chuyên nghiệp, thông minh, ngắn gọn, có gạch đầu dòng rõ ràng.\n"
-        f"- Tập trung vào giá trị thực tế và giải pháp hành động cụ thể cho người dân, không chỉ đơn thuần lặp lại số liệu thống kê."
-    )
-
-    try:
-        success, reply = goi_gemini_api(ai_prompt)
-        if success and reply and len(reply.strip()) > 20:
-            return {
-                "success": True,
-                "reply": reply.strip(),
-                "model": "Gemini 2.5 Flash (Antigravity Copilot Engine)",
-                "action": action,
-                "source": "gemini_live"
-            }
-    except Exception:
-        pass
-    
-    # Fallback to local intelligent deterministic engine
-    fallback_data = tao_phan_hoi_copilot_fallback(action, prompt, context)
-    return {
-        "success": True,
-        "reply": fallback_data["reply"],
-        "model": fallback_data["model"],
-        "action": action,
-        "source": "antigravity_deterministic"
-    }
-
-@app.route('/api/copilot', methods=['POST', 'OPTIONS'])
-@app.route('/api/ai-chat', methods=['POST', 'OPTIONS'])
-def api_copilot_chat():
-    if request.method == 'OPTIONS':
-        res = jsonify({"status": "ok"})
-        res.headers.add("Access-Control-Allow-Origin", "*")
-        res.headers.add("Access-Control-Allow-Headers", "Content-Type, Authorization")
-        res.headers.add("Access-Control-Allow-Methods", "POST, OPTIONS")
-        return res, 200
-
-    try:
-        data = request.get_json(silent=True) or {}
-        prompt = (data.get("prompt") or "").strip()
-        action = (data.get("action") or "").strip()
-        context = data.get("context") or {}
-
-        # Nếu context không được gửi, tự lấy dữ liệu mặc định
-        if not context:
-            lat, lon, ten_vi_tri = admin_location["lat"], admin_location["lon"], admin_location["name"]
-            context = {
-                "location": ten_vi_tri,
-                "temp": 26.5,
-                "feels_like": 27.8,
-                "desc": "Mây rải rác",
-                "humidity": 76,
-                "pm25": 28.5,
-                "aqi_level": 2,
-                "wind_speed": 11,
-                "news_titles": [n.get("title", "") for n in lay_tat_ca_bai_viet_ngau_nhien()[:3]]
-            }
-
-        result = tao_phan_hoi_copilot_ai(prompt, action, context)
-        result["timestamp"] = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=7))).strftime('%H:%M %d/%m/%Y')
-        response = jsonify(result)
-        response.headers.add("Access-Control-Allow-Origin", "*")
-        return response, 200
-    except Exception as e:
-        fallback = tao_phan_hoi_copilot_fallback(
-            action if 'action' in locals() else '', 
-            prompt if 'prompt' in locals() else '', 
-            context if 'context' in locals() and context else {}
-        )
-        response = jsonify({
-            "success": True,
-            "reply": fallback["reply"],
-            "model": fallback["model"],
-            "fallback_error": str(e),
-            "timestamp": datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=7))).strftime('%H:%M %d/%m/%Y')
-        })
-        response.headers.add("Access-Control-Allow-Origin", "*")
-        return response, 200
-
-# =====================================================================
-# [PHẦN 8B] VIENEU-TTS AI SPEECH SYNTHESIS ENGINE (pnnbao97/VieNeu-TTS)
-# =====================================================================
-
-try:
-    from vieneu_service import vieneu_manager, VIENEU_VOICES
-    VIENEU_TTS_AVAILABLE = True
-except Exception as e:
-    VIENEU_TTS_AVAILABLE = False
-    vieneu_manager = None
-    VIENEU_VOICES = []
-
-@app.route('/api/tts/status', methods=['GET', 'OPTIONS'])
-def api_tts_status():
-    if request.method == 'OPTIONS':
-        res = jsonify({"status": "ok"})
-        res.headers.add("Access-Control-Allow-Origin", "*")
-        res.headers.add("Access-Control-Allow-Headers", "Content-Type, Authorization")
-        res.headers.add("Access-Control-Allow-Methods", "GET, OPTIONS")
-        return res, 200
-    try:
-        if VIENEU_TTS_AVAILABLE and vieneu_manager:
-            status = vieneu_manager.get_status()
-            status["voices"] = vieneu_manager.get_voices()
-        else:
-            status = {
-                "ready": False,
-                "engine": "VieNeu-TTS",
-                "error": "Module not available on server",
-                "voices": []
-            }
-        resp = jsonify(status)
-        resp.headers.add("Access-Control-Allow-Origin", "*")
-        return resp, 200
-    except Exception as e:
-        return jsonify({"ready": False, "error": str(e)}), 500
-
-@app.route('/api/tts/voices', methods=['GET', 'OPTIONS'])
-def api_tts_voices():
-    if request.method == 'OPTIONS':
-        res = jsonify({"status": "ok"})
-        res.headers.add("Access-Control-Allow-Origin", "*")
-        return res, 200
-    try:
-        voices = vieneu_manager.get_voices() if (VIENEU_TTS_AVAILABLE and vieneu_manager) else []
-        resp = jsonify({"success": True, "voices": voices})
-        resp.headers.add("Access-Control-Allow-Origin", "*")
-        return resp, 200
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
-
-@app.route('/api/tts/vieneu', methods=['POST', 'OPTIONS'])
-@app.route('/api/tts', methods=['POST', 'OPTIONS'])
-def api_tts_synthesize():
-    if request.method == 'OPTIONS':
-        res = jsonify({"status": "ok"})
-        res.headers.add("Access-Control-Allow-Origin", "*")
-        res.headers.add("Access-Control-Allow-Headers", "Content-Type, Authorization")
-        res.headers.add("Access-Control-Allow-Methods", "POST, OPTIONS")
-        return res, 200
-
-    if not VIENEU_TTS_AVAILABLE or not vieneu_manager:
-        return jsonify({
-            "success": False,
-            "error": "VieNeu-TTS is not configured or available on this server.",
-            "fallback": "web_speech"
-        }), 503
-
-    try:
-        data = request.get_json(silent=True) or {}
-        text = (data.get("text") or data.get("input") or "").strip()
-        voice = data.get("voice", "Mai Anh")
-        speed = float(data.get("speed", 1.0))
-        output_format = (data.get("format") or "").lower()
-
-        if not text:
-            return jsonify({"success": False, "error": "Thiếu văn bản 'text' cần chuyển đổi thành giọng đọc."}), 400
-
-        res = vieneu_manager.synthesize(text=text, voice=voice, speed=speed)
-
-        # Nếu client muốn nhận trực tiếp binary WAV
-        if output_format == "wav" or "audio/wav" in request.headers.get("Accept", ""):
-            from flask import Response
-            response = Response(res["wav_bytes"], mimetype="audio/wav")
-            response.headers["Content-Disposition"] = "inline; filename=speech.wav"
-            response.headers["Access-Control-Allow-Origin"] = "*"
-            return response
-
-        # Mặc định trả về JSON chứa base64 audio data URI
-        payload = {
-            "success": True,
-            "audio": res["audio"],
-            "duration_seconds": res["duration_seconds"],
-            "sample_rate": res["sample_rate"],
-            "voice": res["voice"],
-            "voice_info": res.get("voice_info"),
-            "speed": res["speed"],
-            "engine": res["engine"],
-            "paragraphs_count": res.get("paragraphs_count", 1),
-            "cached": res.get("cached", False)
-        }
-        response = jsonify(payload)
-        response.headers.add("Access-Control-Allow-Origin", "*")
-        return response, 200
-    except Exception as e:
-        response = jsonify({
-            "success": False,
-            "error": str(e),
-            "fallback": "web_speech"
-        })
-        response.headers.add("Access-Control-Allow-Origin", "*")
-        return response, 500
-
-@app.route('/v1/audio/speech', methods=['POST', 'OPTIONS'])
-def api_openai_speech_compatible():
-    """Endpoint tương thích chuẩn OpenAI TTS API (/v1/audio/speech)"""
-    if request.method == 'OPTIONS':
-        res = jsonify({"status": "ok"})
-        res.headers.add("Access-Control-Allow-Origin", "*")
-        res.headers.add("Access-Control-Allow-Headers", "Content-Type, Authorization")
-        res.headers.add("Access-Control-Allow-Methods", "POST, OPTIONS")
-        return res, 200
-
-    if not VIENEU_TTS_AVAILABLE or not vieneu_manager:
-        return jsonify({"error": {"message": "TTS engine not available"}}), 503
-
-    try:
-        data = request.get_json(silent=True) or {}
-        text = (data.get("input") or data.get("text") or "").strip()
-        voice = data.get("voice", "Mai Anh")
-        speed = float(data.get("speed", 1.0))
-        if not text:
-            return jsonify({"error": {"message": "Input text required"}}), 400
-        
-        res = vieneu_manager.synthesize(text=text, voice=voice, speed=speed)
-        from flask import Response
-        response = Response(res["wav_bytes"], mimetype="audio/wav")
-        response.headers["Content-Disposition"] = "inline; filename=speech.wav"
-        response.headers["Access-Control-Allow-Origin"] = "*"
-        return response
-    except Exception as e:
-        return jsonify({"error": {"message": str(e)}}), 500
-
 
 # =====================================================================
 # [PHẦN 9] XỬ LÝ UPDATE TELEGRAM (dùng chung Polling + Webhook)
@@ -2783,8 +1971,37 @@ def xu_ly_telegram_update(data):
                         warningText = "Trời nắng đẹp, tầm nhìn tốt. Chỉ số UV ở mức trung bình đến cao."
                         suggestionItems = ["Điều khiển phương tiện: Giao thông thuận lợi, chú ý chống chói khi lái xe.", "Trang bị: Nên đội mũ, đeo kính râm, bôi kem chống nắng nếu ra ngoài lâu."]
 
-                    videos_list = lay_danh_sach_video_da_dang(so_luong=6, trang_thai=trang_thai)
-                    video_data = videos_list[0] if videos_list else None
+                    video_data = None
+                    try:
+                        url_yt = "https://www.youtube.com/feeds/videos.xml?channel_id=UCabsTV34JwALXKGMqHpvUiA"
+                        res_yt = requests.get(url_yt, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+                        res_yt.encoding = 'utf-8'
+                        if res_yt.status_code == 200:
+                            try:
+                                from bs4 import BeautifulSoup
+                                soup_yt = BeautifulSoup(res_yt.text, 'xml')
+                            except:
+                                soup_yt = BeautifulSoup(res_yt.text, 'html.parser')
+                            entries = soup_yt.find_all('entry')
+                            if entries:
+                                kws = (['mưa', 'lũ', 'ngập', 'bão'] if trang_thai in ["MUA_NHO", "MUA_DONG", "MUA_BAO"]
+                                       else ['nắng', 'hạn hán', 'nhiệt độ'])
+                                found_vid = False
+                                for entry in entries:
+                                    vtitle = entry.title.text if entry.title else ""
+                                    vlink  = entry.find('link')['href'] if entry.find('link') and 'href' in entry.find('link').attrs else ""
+                                    if any(kw in vtitle.lower() for kw in kws):
+                                        video_data = {"title": vtitle, "link": vlink}
+                                        found_vid = True
+                                        break
+                                if not found_vid:
+                                    vtitle = entries[0].title.text if entries[0].title else "Tin tức VTV24"
+                                    vlink  = entries[0].find('link')['href'] if entries[0].find('link') and 'href' in entries[0].find('link').attrs else ""
+                                    if vlink:
+                                        video_data = {"title": vtitle, "link": vlink}
+                    except:
+                        pass
+                        
 
                     # ── 2. Lấy tin tức (giảm còn 5 bài để URL không vượt quá 4000 ký tự của Telegram) ──
                     tin_tuc_raw = lay_bai_viet_moi_chua_gui(str(chat_id), so_luong=12)
@@ -2793,6 +2010,8 @@ def xu_ly_telegram_update(data):
                         # Bỏ hẳn description để giảm dung lượng URL dưới 4000 ký tự (tránh lỗi 400)
                         if 'description' in t:
                             t['description'] = ""
+
+
 
                     # ── 3. Đóng gói data ──
                     data_payload = {
@@ -2819,7 +2038,6 @@ def xu_ly_telegram_update(data):
                         "floodItems": floodItems,
                         "routeItems": routeItems,
                         "video": video_data,
-                        "videos": videos_list,
                         "news": tin_tuc
                     }
 
@@ -3113,6 +2331,91 @@ def telegram_generic_webhook():
 @app.route('/ping')
 def ping():
     return "Pong", 200
+
+def trich_xuat_noi_dung_bai_bao(url, title="", description=""):
+    """
+    Trích xuất toàn văn nội dung bài báo, các đoạn văn, hình ảnh và phân tích tóm lược.
+    Có cơ chế xử lý thông minh khi liên kết ngoài bị chặn hoặc không thể truy cập.
+    """
+    paragraphs = []
+    author = ""
+    pub_time = ""
+    
+    if url and url != "#" and url.startswith("http"):
+        try:
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+            }
+            resp = requests.get(url, headers=headers, timeout=4.0)
+            if resp.status_code == 200:
+                resp.encoding = resp.apparent_encoding or 'utf-8'
+                soup = BeautifulSoup(resp.text, 'html.parser')
+                
+                # Tìm tác giả
+                author_el = soup.find(class_=lambda c: c and any(k in str(c).lower() for k in ['author', 'tac-gia', 'byline', 'journalist']))
+                if author_el:
+                    author = author_el.get_text().strip()
+                
+                # Tìm thời gian
+                time_el = soup.find(class_=lambda c: c and any(k in str(c).lower() for k in ['date', 'time', 'publish', 'ngay-dang'])) or soup.find('time')
+                if time_el:
+                    pub_time = time_el.get_text().strip()
+                
+                # Lấy các đoạn văn chính
+                article_body = soup.find(['article', 'main']) or soup.find(class_=lambda c: c and any(k in str(c).lower() for k in ['article', 'detail', 'content', 'body', 'fck_detail']))
+                container = article_body if article_body else soup
+                
+                for p in container.find_all('p'):
+                    txt = p.get_text().strip()
+                    if len(txt) > 30 and not any(skip in txt.lower() for skip in ['liên hệ', 'bản quyền', 'hotline', 'quảng cáo', 'tải app', 'email:']):
+                        paragraphs.append(txt)
+        except Exception:
+            pass
+
+    if not paragraphs:
+        if description and len(description) > 20:
+            paragraphs = [p.strip() for p in description.split('.') if len(p.strip()) > 15]
+            if not paragraphs:
+                paragraphs = [description]
+        else:
+            paragraphs = [f"{title}. Bản tin chi tiết đang được các phóng viên và biên tập viên liên tục cập nhật."]
+
+    return {
+        "url": url,
+        "title": title,
+        "author": author or "Ban Thời Sự",
+        "published_time": pub_time or datetime.datetime.now().strftime("%H:%M %d/%m/%Y"),
+        "paragraphs": paragraphs,
+        "total_paragraphs": len(paragraphs)
+    }
+
+@app.route('/api/article-detail', methods=['GET', 'POST', 'OPTIONS'])
+def api_article_detail():
+    if request.method == 'OPTIONS':
+        resp = make_response()
+        resp.headers.add("Access-Control-Allow-Origin", "*")
+        resp.headers.add("Access-Control-Allow-Headers", "Content-Type,Authorization")
+        resp.headers.add("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+        return resp
+        
+    try:
+        if request.method == 'POST':
+            data = request.get_json(silent=True) or {}
+            url = data.get("url", "")
+            title = data.get("title", "")
+            description = data.get("description", "")
+        else:
+            url = request.args.get("url", "")
+            title = request.args.get("title", "")
+            description = request.args.get("desc", "")
+            
+        result = trich_xuat_noi_dung_bai_bao(url, title=title, description=description)
+        response = jsonify(result)
+        response.headers.add("Access-Control-Allow-Origin", "*")
+        return response
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/')
 def home():

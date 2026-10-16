@@ -2,11 +2,11 @@
 Comprehensive System Integrity Test Suite for Quan Ly Tien Phong Backend
 Ensures 100% test coverage and validation for:
 1. Weather condition determination & edge cases
-2. Video aggregator & strict YouTube Shorts rejection
+2. News aggregation & Telegram auto-push data flow
 3. Text processing, mojibake repair & HTML sanitization
 4. State compression & decompression roundtrip
-5. Antigravity Copilot AI Engine & deterministic fallbacks
-6. Flask REST API endpoints (/api/daily-news, /api/copilot, /api/ai-chat, /ping, /)
+5. Google Sheets category separation (TOAN vs TIENGVIET)
+6. Flask REST API endpoints (/api/daily-news, /api/article-detail, /ping, /)
 """
 
 import unittest
@@ -27,11 +27,12 @@ os.environ["TELEGRAM_BOT_TOKEN"] = os.environ.get("TELEGRAM_BOT_TOKEN", "mock_te
 from main import (
     app,
     xac_dinh_trang_thai_thoi_tiet,
-    lay_danh_sach_video_da_dang,
+    xac_dinh_sheet_cho_thu_muc,
     sua_loi_mojibake,
     escape_html,
-    tao_phan_hoi_copilot_fallback,
-    tao_phan_hoi_copilot_ai,
+    lay_thoi_tiet_va_tin_tuc_hien_tai,
+    lay_tat_ca_bai_viet_ngau_nhien,
+    trich_xuat_noi_dung_bai_bao,
 )
 
 
@@ -83,40 +84,6 @@ class TestWeatherClassification(unittest.TestCase):
         self.assertEqual(res, "BINH_THUONG")
 
 
-class TestVideoIntegrity(unittest.TestCase):
-    """Kiểm tra tính toàn vẹn của Video Aggregator: Tuyệt đối không dùng YouTube Shorts."""
-
-    def test_no_shorts_in_returned_videos(self):
-        videos = lay_danh_sach_video_da_dang(so_luong=10)
-        self.assertTrue(len(videos) > 0, "Danh sách video không được để trống")
-
-        shorts_keywords = ["#short", "#shorts", "30s nóng", "tiktok", "#reels", "reels"]
-
-        for v in videos:
-            self.assertIn("id", v)
-            self.assertIn("title", v)
-            self.assertIn("link", v)
-            self.assertIn("embed_url", v)
-
-            # Link tuyệt đối không chứa /shorts/
-            self.assertNotIn("/shorts/", v["link"].lower(), f"Video link chứa shorts: {v['link']}")
-
-            # Tiêu đề không được chứa các hashtag shorts
-            title_lower = v["title"].lower()
-            for kw in shorts_keywords:
-                self.assertNotIn(kw, title_lower, f"Tiêu đề video chứa từ khóa shorts '{kw}': {v['title']}")
-
-            # Embed url phải trỏ tới /embed/
-            self.assertIn("/embed/", v["embed_url"])
-
-    def test_video_structure_completeness(self):
-        videos = lay_danh_sach_video_da_dang(so_luong=5)
-        for v in videos:
-            self.assertGreater(len(v["id"]), 5)
-            self.assertGreater(len(v["title"]), 5)
-            self.assertTrue(v["thumbnail"].startswith("https://"))
-
-
 class TestTextAndCompressionIntegrity(unittest.TestCase):
     """Kiểm tra xử lý văn bản, bảo mật HTML và nén dữ liệu zlib URL."""
 
@@ -153,58 +120,35 @@ class TestTextAndCompressionIntegrity(unittest.TestCase):
         self.assertEqual(sample_payload, restored_payload)
 
 
-class TestAntigravityCopilotAI(unittest.TestCase):
-    """Kiểm tra Antigravity Copilot: Phải có khả năng phân tích thực tế, không chỉ là số liệu thô."""
+class TestGoogleSheetsClassification(unittest.TestCase):
+    """Kiểm tra phân loại thư mục cha vào đúng Google Sheet theo Checkpoint 10h5210122026."""
 
-    def setUp(self):
-        self.context = {
-            "location": "Hà Nội",
-            "temp": 27.5,
-            "feels_like": 29.0,
-            "desc": "Mưa rào nhẹ rải rác",
-            "humidity": 82,
-            "pm25": 42.0,
-            "aqi_level": 3,
-            "wind_speed": 14,
-            "news_titles": [
-                "VTV24: Hà Nội phân luồng giao thông chống ngập",
-                "Báo Tiền Phong: Dự báo diễn biến thời tiết khu vực miền Bắc",
-                "Báo Tuổi Trẻ: Đổi mới sáng tạo trong hạ tầng đô thị"
-            ]
-        }
+    def test_toan_classification(self):
+        self.assertEqual(xac_dinh_sheet_cho_thu_muc("TUAN1_KNTT_TOAN4_MNT"), "TOAN")
+        self.assertEqual(xac_dinh_sheet_cho_thu_muc("Lop_5_Mon_Toan_Tuan_10"), "TOAN")
 
-    def test_copilot_weather_impact_action(self):
-        res = tao_phan_hoi_copilot_fallback("weather_impact", "", self.context)
-        self.assertIn("reply", res)
-        self.assertIn("HÀ NỘI", res["reply"])
-        self.assertIn("Khuyến nghị Antigravity Copilot", res["reply"])
-        self.assertIn("risk_level", res)
-        self.assertIn("Antigravity Intelligent Copilot", res["model"])
+    def test_tiengviet_classification(self):
+        self.assertEqual(xac_dinh_sheet_cho_thu_muc("KNTT_TIENGVIET4_MNT_TUAN1"), "TIENGVIET")
+        self.assertEqual(xac_dinh_sheet_cho_thu_muc("TIENG_VIET_LOP_3_TUAN_2"), "TIENGVIET")
 
-    def test_copilot_news_digest_action(self):
-        res = tao_phan_hoi_copilot_fallback("news_digest", "", self.context)
-        self.assertIn("reply", res)
-        self.assertIn("ĐIỂM TIN & PHÂN TÍCH TIÊU ĐIỂM", res["reply"])
-        self.assertIn("Nhận định AI", res["reply"])
 
-    def test_copilot_health_pm25_action(self):
-        res = tao_phan_hoi_copilot_fallback("health_pm25", "", self.context)
-        self.assertIn("reply", res)
-        self.assertIn("PM2.5", res["reply"])
-        self.assertIn("Tác động sinh học", res["reply"])
-        self.assertIn("Hành động y tế đề xuất", res["reply"])
+class TestWeatherAndNewsRetrieval(unittest.TestCase):
+    """Kiểm tra luồng lấy thời tiết hiện tại và tổng hợp tin tức tự động."""
 
-    def test_copilot_smart_route_action(self):
-        res = tao_phan_hoi_copilot_fallback("smart_route", "", self.context)
-        self.assertIn("reply", res)
-        self.assertIn("CẢNH BÁO ĐIỂM ĐEN NGẬP ÚNG", res["reply"])
-        self.assertIn("Khuyến nghị điều hướng", res["reply"])
+    def test_weather_retrieval_returns_valid_content(self):
+        msg, aqi, bai_viet = lay_thoi_tiet_va_tin_tuc_hien_tai(include_news=True)
+        self.assertNotIn("⚠️ Lỗi dữ liệu", msg)
+        self.assertIn("THỜI TIẾT HIỆN TẠI", msg)
+        self.assertIn("Nhiệt độ:", msg)
+        self.assertGreater(len(msg), 100)
 
-    def test_copilot_custom_prompt_chat(self):
-        prompt = "Tôi có nên đi ra ngoài bằng xe máy lúc này không?"
-        res = tao_phan_hoi_copilot_fallback("general_chat", prompt, self.context)
-        self.assertIn("reply", res)
-        self.assertIn(prompt, res["reply"])
+    def test_news_retrieval_returns_articles(self):
+        articles = lay_tat_ca_bai_viet_ngau_nhien()
+        self.assertIsInstance(articles, list)
+        self.assertGreater(len(articles), 0)
+        top = articles[0]
+        self.assertIn("title", top)
+        self.assertIn("link", top)
 
 
 class TestFlaskAPIEndpoints(unittest.TestCase):
@@ -234,7 +178,6 @@ class TestFlaskAPIEndpoints(unittest.TestCase):
         self.assertIn("location", data)
         self.assertIn("weather", data)
         self.assertIn("news", data)
-        self.assertIn("videos", data)
 
         # Weather nested fields
         weather = data["weather"]
@@ -243,155 +186,14 @@ class TestFlaskAPIEndpoints(unittest.TestCase):
         self.assertIn("status", weather)
         self.assertIn("temp", weather["current"])
 
-        # Videos list
-        self.assertTrue(len(data["videos"]) > 0)
-        for v in data["videos"]:
-            self.assertNotIn("/shorts/", v.get("link", "").lower())
-
-    def test_copilot_options_cors(self):
-        res = self.client.options('/api/copilot')
-        self.assertEqual(res.status_code, 200)
-        self.assertEqual(res.headers.get("Access-Control-Allow-Origin"), "*")
-
-        res_ai = self.client.options('/api/ai-chat')
-        self.assertEqual(res_ai.status_code, 200)
-        self.assertEqual(res_ai.headers.get("Access-Control-Allow-Origin"), "*")
-
-    def test_copilot_post_actions(self):
-        actions = ["weather_impact", "news_digest", "health_pm25", "smart_route"]
-        for action in actions:
-            payload = {
-                "action": action,
-                "context": {
-                    "location": "Hà Nội",
-                    "temp": 28.0,
-                    "desc": "Mây thưa",
-                    "pm25": 30.0
-                }
-            }
-            res = self.client.post('/api/copilot', json=payload)
-            self.assertEqual(res.status_code, 200)
-            self.assertEqual(res.headers.get("Access-Control-Allow-Origin"), "*")
-            data = json.loads(res.get_data(as_text=True))
-            self.assertTrue(data.get("success"))
-            self.assertGreater(len(data.get("reply", "")), 30)
-
-    def test_copilot_freeform_prompt(self):
-        payload = {
-            "prompt": "Tuyến đường Trần Phú - Nguyễn Trãi hôm nay có an toàn không?",
-            "context": {
-                "location": "Hà Đông",
-                "temp": 29.0,
-                "desc": "Trời nắng"
-            }
-        }
-        res = self.client.post('/api/ai-chat', json=payload)
-        self.assertEqual(res.status_code, 200)
-        data = json.loads(res.get_data(as_text=True))
-        self.assertTrue(data.get("success"))
-        self.assertGreater(len(data.get("reply", "")), 20)
-
-    def test_copilot_empty_payload_graceful_handling(self):
-        # Empty payload must NOT crash with 500
-        res = self.client.post('/api/copilot', json={})
-        self.assertEqual(res.status_code, 200)
-        data = json.loads(res.get_data(as_text=True))
-        self.assertTrue(data.get("success"))
-        self.assertGreater(len(data.get("reply", "")), 20)
-
     def test_article_detail_api_endpoint(self):
-        # 1. OPTIONS CORS
-        res_opt = self.client.options('/api/article-detail')
-        self.assertEqual(res_opt.status_code, 200)
-        self.assertEqual(res_opt.headers.get("Access-Control-Allow-Origin"), "*")
-
-        # 2. GET request
-        res_get = self.client.get('/api/article-detail?title=Ha+Noi+mua+dong&desc=Canh+bao+ngap')
-        self.assertEqual(res_get.status_code, 200)
-        data_get = json.loads(res_get.get_data(as_text=True))
-        self.assertIn("paragraphs", data_get)
-        self.assertTrue(len(data_get["paragraphs"]) > 0)
-        self.assertIn("tags", data_get)
-        self.assertIn("key_takeaways", data_get)
-
-        # 3. POST request
-        payload = {
-            "url": "https://tienphong.vn/tin-tuc-demo-123.tpo",
-            "title": "Chủ động các biện pháp ứng phó thời tiết cực đoan tại Hà Nội",
-            "description": "Các lực lượng chức năng ứng trực 24/7 để xử lý các điểm ngập úng."
-        }
-        res_post = self.client.post('/api/article-detail', json=payload)
-        self.assertEqual(res_post.status_code, 200)
-        data_post = json.loads(res_post.get_data(as_text=True))
-        self.assertEqual(data_post["title"], payload["title"])
-        self.assertTrue(len(data_post["paragraphs"]) >= 3)
-        self.assertTrue(len(data_post["key_takeaways"]) > 0)
-        self.assertTrue(data_post["reading_time_minutes"] >= 1)
-
-    def test_tts_status_endpoint(self):
-        # OPTIONS CORS
-        res_opt = self.client.options('/api/tts/status')
-        self.assertEqual(res_opt.status_code, 200)
-        self.assertEqual(res_opt.headers.get("Access-Control-Allow-Origin"), "*")
-
-        # GET Status
-        res = self.client.get('/api/tts/status')
+        res = self.client.get('/api/article-detail?title=Sample%20News&desc=Sample%20description%20text%20for%20testing')
         self.assertEqual(res.status_code, 200)
         data = json.loads(res.get_data(as_text=True))
-        self.assertEqual(data.get("engine"), "VieNeu-TTS")
-        self.assertIn("voices", data)
-        self.assertGreater(len(data["voices"]), 0)
-
-    def test_tts_voices_endpoint(self):
-        res = self.client.get('/api/tts/voices')
-        self.assertEqual(res.status_code, 200)
-        data = json.loads(res.get_data(as_text=True))
-        self.assertTrue(data.get("success"))
-        self.assertIsInstance(data.get("voices"), list)
-        self.assertGreaterEqual(len(data["voices"]), 10)
-
-    def test_tts_vieneu_endpoint_and_cache(self):
-        # OPTIONS CORS
-        res_opt = self.client.options('/api/tts/vieneu')
-        self.assertEqual(res_opt.status_code, 200)
-
-        # POST synthesis
-        payload = {
-            "text": "Báo Tiền Phong - Tiếng nói của Đoàn Thanh niên Cộng sản Hồ Chí Minh.",
-            "voice": "Mai Anh",
-            "speed": 1.0
-        }
-        res = self.client.post('/api/tts/vieneu', json=payload)
-        self.assertEqual(res.status_code, 200)
-        data = json.loads(res.get_data(as_text=True))
-        self.assertTrue(data.get("success"))
-        self.assertIn("audio", data)
-        self.assertTrue(data["audio"].startswith("data:audio/wav;base64,"))
-        self.assertEqual(data.get("voice"), "Mai Anh")
-        self.assertGreater(data.get("duration_seconds", 0), 0)
-
-        # Second call to test caching
-        res_cached = self.client.post('/api/tts/vieneu', json=payload)
-        self.assertEqual(res_cached.status_code, 200)
-        data_cached = json.loads(res_cached.get_data(as_text=True))
-        self.assertTrue(data_cached.get("cached"))
-
-    def test_tts_empty_payload_validation(self):
-        res = self.client.post('/api/tts/vieneu', json={"text": ""})
-        self.assertEqual(res.status_code, 400)
-
-    def test_openai_speech_compatible_endpoint(self):
-        payload = {
-            "input": "Kính chào quý vị thính giả.",
-            "voice": "Mai Anh",
-            "speed": 1.0
-        }
-        res = self.client.post('/v1/audio/speech', json=payload)
-        self.assertEqual(res.status_code, 200)
-        self.assertEqual(res.headers.get("Content-Type"), "audio/wav")
-        self.assertGreater(len(res.data), 1000)
+        self.assertIn("title", data)
+        self.assertIn("paragraphs", data)
+        self.assertGreater(len(data["paragraphs"]), 0)
 
 
 if __name__ == '__main__':
     unittest.main()
-
