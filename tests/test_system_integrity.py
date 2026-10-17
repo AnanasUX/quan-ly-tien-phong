@@ -194,6 +194,28 @@ class TestFlaskAPIEndpoints(unittest.TestCase):
         self.assertIn("paragraphs", data)
         self.assertGreater(len(data["paragraphs"]), 0)
 
+    def test_tts_voices_endpoint(self):
+        res = self.client.get('/api/tts/voices')
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.headers.get("Access-Control-Allow-Origin"), "*")
+        data = json.loads(res.get_data(as_text=True))
+        self.assertTrue(data.get("success"))
+        self.assertIn("voices", data)
+        self.assertGreater(len(data["voices"]), 0)
+
+    def test_tts_vieneu_endpoint(self):
+        res = self.client.post('/api/tts/vieneu', json={
+            "text": "Bản tin thử nghiệm.",
+            "voice": "Mai Anh",
+            "speed": 1.0
+        })
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.headers.get("Access-Control-Allow-Origin"), "*")
+        data = json.loads(res.get_data(as_text=True))
+        self.assertTrue(data.get("success"))
+        self.assertIn("audio", data)
+        self.assertTrue(data["audio"].startswith("data:audio/wav;base64,"))
+
 
 if __name__ == '__main__':
     unittest.main()

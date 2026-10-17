@@ -101,7 +101,7 @@ DOC_LOGIC_ID         = os.environ.get("DOC_LOGIC_ID", "1a9_qNqFEpbmuIoKuEvT3cExH
 DOC_NEWS_ID          = os.environ.get("DOC_NEWS_ID", "NHẬP_ID_FILE_DOCS_TIN_TỨC_VÀO_ĐÂY")
 
 if not TELEGRAM_BOT_TOKEN:
-    raise RuntimeError("❌ TELEGRAM_BOT_TOKEN chưa được cấu hình trong biến môi trường!")
+    print("⚠️ CẢNH BÁO: TELEGRAM_BOT_TOKEN chưa được cấu hình. REST API và VieNeu-TTS vẫn sẵn sàng phục vụ.")
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AQ.Ab8RN6IBgzuK4JMCYVYWqDeRpTsOgfqxIWnUxw82IBe49xb-sA")
 
@@ -2369,15 +2369,16 @@ def xu_ly_telegram_update(data):
 # =====================================================================
 # [PHẦN 10] FLASK ROUTES (Webhook + Polling)
 # =====================================================================
-@app.route(f'/{TELEGRAM_BOT_TOKEN}', methods=['POST'])
-def telegram_webhook():
-    try:
-        data = request.get_json()
-        if data:
-            threading.Thread(target=xu_ly_telegram_update, args=(data,), daemon=True).start()
-        return "OK", 200
-    except Exception:
-        return "OK", 200
+if TELEGRAM_BOT_TOKEN:
+    @app.route(f'/{TELEGRAM_BOT_TOKEN}', methods=['POST'])
+    def telegram_webhook():
+        try:
+            data = request.get_json()
+            if data:
+                threading.Thread(target=xu_ly_telegram_update, args=(data,), daemon=True).start()
+            return "OK", 200
+        except Exception:
+            return "OK", 200
 
 @app.route('/webhook', methods=['POST'])
 def telegram_generic_webhook():
@@ -2395,12 +2396,13 @@ def ping():
 
 def trich_xuat_noi_dung_bai_bao(url, title="", description=""):
     """
-    Trích xuất toàn văn nội dung bài báo, các đoạn văn, hình ảnh và phân tích tóm lược.
-    Có cơ chế xử lý thông minh khi liên kết ngoài bị chặn hoặc không thể truy cập.
+    Trích xuất toàn văn 100% nội dung bài báo, các đoạn văn, hình ảnh và thông tin chi tiết.
+    Loại trừ chính xác các thanh điều hướng (như justify-content-sb) để đảm bảo lấy đầy đủ thân bài.
     """
     paragraphs = []
     author = ""
     pub_time = ""
+    sapo = ""
     
     if url and url != "#" and url.startswith("http"):
         try:
@@ -2408,7 +2410,7 @@ def trich_xuat_noi_dung_bai_bao(url, title="", description=""):
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
             }
-            resp = requests.get(url, headers=headers, timeout=4.0)
+            resp = requests.get(url, headers=headers, timeout=6.0)
             if resp.status_code == 200:
                 resp.encoding = resp.apparent_encoding or 'utf-8'
                 soup = BeautifulSoup(resp.text, 'html.parser')
@@ -2422,14 +2424,39 @@ def trich_xuat_noi_dung_bai_bao(url, title="", description=""):
                 time_el = soup.find(class_=lambda c: c and any(k in str(c).lower() for k in ['date', 'time', 'publish', 'ngay-dang'])) or soup.find('time')
                 if time_el:
                     pub_time = time_el.get_text().strip()
+
+                # Tìm Sapo
+                sapo_el = soup.find(class_=lambda c: c and any(k in str(c).lower() for k in ['sapo', 'lead', 'summary', 'detail-sapo']))
+                if sapo_el:
+                    sapo = sapo_el.get_text().strip()
                 
-                # Lấy các đoạn văn chính
-                article_body = soup.find(['article', 'main']) or soup.find(class_=lambda c: c and any(k in str(c).lower() for k in ['article', 'detail', 'content', 'body', 'fck_detail']))
-                container = article_body if article_body else soup
-                
-                for p in container.find_all('p'):
+                # Tìm container bài viết tốt nhất bằng cách duyệt các selector chuẩn báo chí
+                candidate_selectors = [
+                    "article",
+                    ".detail-content",
+                    ".detail-body",
+                    ".news-detail",
+                    ".article-content",
+                    ".article-body",
+                    ".fck_detail",
+                    ".content-detail",
+                    ".entry-content",
+                    ".post-content",
+                    "main"
+                ]
+                best_container = None
+                max_p = 0
+                for sel in candidate_selectors:
+                    for el in soup.select(sel):
+                        valid_p = [p for p in el.find_all('p') if len(p.get_text().strip()) > 30]
+                        if len(valid_p) > max_p:
+                            max_p = len(valid_p)
+                            best_container = el
+
+                target_container = best_container if best_container else soup
+                for p in target_container.find_all('p'):
                     txt = p.get_text().strip()
-                    if len(txt) > 30 and not any(skip in txt.lower() for skip in ['liên hệ', 'bản quyền', 'hotline', 'quảng cáo', 'tải app', 'email:']):
+                    if len(txt) > 30 and not any(skip in txt.lower() for skip in ['liên hệ', 'bản quyền', 'hotline', 'quảng cáo', 'tải app', 'email:', 'đường dây nóng', 'vui lòng nhập đủ']):
                         paragraphs.append(txt)
         except Exception:
             pass
@@ -2447,6 +2474,7 @@ def trich_xuat_noi_dung_bai_bao(url, title="", description=""):
         "title": title,
         "author": author or "Ban Thời Sự",
         "published_time": pub_time or datetime.datetime.now().strftime("%H:%M %d/%m/%Y"),
+        "sapo": sapo or description,
         "paragraphs": paragraphs,
         "total_paragraphs": len(paragraphs)
     }
@@ -2478,12 +2506,54 @@ def api_article_detail():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/tts/vieneu', methods=['POST', 'OPTIONS'])
+def api_tts_vieneu():
+    if request.method == 'OPTIONS':
+        resp = make_response()
+        resp.headers.add("Access-Control-Allow-Origin", "*")
+        resp.headers.add("Access-Control-Allow-Headers", "Content-Type,Authorization")
+        resp.headers.add("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+        return resp
+    try:
+        data = request.get_json(silent=True) or {}
+        text = data.get("text", "")
+        voice = data.get("voice", "Mai Anh")
+        speed = float(data.get("speed", 1.0))
+        from vieneu_service import vieneu_manager
+        result = vieneu_manager.synthesize(text=text, voice=voice, speed=speed)
+        result.pop("wav_bytes", None)
+        response = jsonify(result)
+        response.headers.add("Access-Control-Allow-Origin", "*")
+        return response
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/tts/voices', methods=['GET', 'OPTIONS'])
+def api_tts_voices():
+    if request.method == 'OPTIONS':
+        resp = make_response()
+        resp.headers.add("Access-Control-Allow-Origin", "*")
+        resp.headers.add("Access-Control-Allow-Headers", "Content-Type,Authorization")
+        resp.headers.add("Access-Control-Allow-Methods", "GET,OPTIONS")
+        return resp
+    try:
+        from vieneu_service import vieneu_manager
+        voices = vieneu_manager.get_voices()
+        response = jsonify({"success": True, "voices": voices})
+        response.headers.add("Access-Control-Allow-Origin", "*")
+        return response
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
 @app.route('/')
 def home():
     return "Hệ thống AnX v7.1 (Token mới 09/2026 – Gemini 2.5 Flash – /tinhcn + /websitecn) đang hoạt động!"
 
 def run_telegram_polling():
     """Long Polling – dùng khi không có webhook."""
+    if not TELEGRAM_BOT_TOKEN or TELEGRAM_BOT_TOKEN == "mock_telegram_token_123456789:ABCDEF":
+        print("[Telegram Polling] Bỏ qua vì chưa có TELEGRAM_BOT_TOKEN.")
+        return
     time.sleep(2)
     try:
         requests.post(
