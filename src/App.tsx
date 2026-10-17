@@ -457,7 +457,7 @@ async function fetchNews(): Promise<NewsArticle[]> {
 
           const rawDesc = item.querySelector("description")?.textContent || "";
           const descDoc = parser.parseFromString(rawDesc, "text/html");
-          const description = descDoc.body?.textContent?.trim().slice(0, 200) || "";
+          const description = descDoc.body?.textContent?.trim().slice(0, 1000) || "";
           const imgTag = descDoc.querySelector("img");
           const image = imgTag?.getAttribute("src") || item.querySelector("enclosure")?.getAttribute("url") || null;
           const sourceEl = item.querySelector("source");
