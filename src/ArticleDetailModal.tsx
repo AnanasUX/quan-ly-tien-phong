@@ -916,24 +916,25 @@ export function ArticleDetailModal({
         </div>
 
         {/* Audio Speech Bar & Reading Customization Toolbar */}
-        <div className={`px-6 py-2.5 border-b flex flex-col gap-2.5 text-[12px] shrink-0 ${themeClasses.toolbarBg}`}>
+        <div className={`px-6 py-2.5 border-b flex flex-col gap-2 text-[12px] shrink-0 ${themeClasses.toolbarBg}`}>
           {/* Main Controls Row */}
           <div className="flex flex-wrap items-center justify-between gap-3">
             {/* Left: Audio Player Controls */}
             <div className="flex items-center gap-2">
               <button
                 onClick={handleToggleSpeech}
+                data-testid="tts-toggle-btn"
                 disabled={isTtsLoading}
-                className={`px-3 py-1.5 rounded-xl font-['Inter:Semi_Bold'] font-semibold transition-all flex items-center gap-2 cursor-pointer ${
+                className={`px-3.5 py-1.5 rounded-xl font-['Inter:Bold'] font-bold text-[12px] transition-all flex items-center gap-2 cursor-pointer ${
                   isSpeaking
                     ? "bg-[#ff315f] text-white shadow-md shadow-[#ff315f]/30 scale-102"
                     : isTtsLoading
                     ? "bg-amber-500 text-white animate-pulse"
-                    : "bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm"
+                    : "bg-[#ff315f] text-white hover:bg-[#e02050] shadow-sm"
                 }`}
               >
-                <span className="text-[14px]">{isTtsLoading ? "⏳" : isSpeaking ? "⏸️" : "🔊"}</span>
-                <span>{isTtsLoading ? "Đang tạo giọng đọc..." : isSpeaking ? "Tạm dừng phát" : "Phát âm thanh"}</span>
+                <span className="text-[13px]">{isTtsLoading ? "⏳" : isSpeaking ? "⏸️" : "▶"}</span>
+                <span>{isTtsLoading ? "Đang tải âm thanh..." : isSpeaking ? "Tạm dừng đọc" : "Nghe đọc báo AI"}</span>
               </button>
 
               {isSpeaking && (
@@ -963,10 +964,10 @@ export function ArticleDetailModal({
                     key={rate}
                     onClick={() => handleRateChange(rate)}
                     className={`px-2 py-0.5 rounded text-[11px] font-semibold transition-colors cursor-pointer ${
-                      speechRate === rate ? "bg-white dark:bg-slate-800 text-indigo-600 shadow-xs" : "text-[#5f687b] hover:text-current"
+                      speechRate === rate ? "bg-white dark:bg-slate-800 text-[#ff315f] shadow-xs font-bold" : "text-[#5f687b] hover:text-current"
                     }`}
                   >
-                    {rate}x
+                    {rate === 1 ? "1.0x" : `${rate}x`}
                   </button>
                 ))}
               </div>
@@ -1057,9 +1058,6 @@ export function ArticleDetailModal({
                   🎙️ Web Speech (Trình duyệt)
                 </button>
               </div>
-              <span className="hidden sm:inline-block px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold text-[10px]">
-                📖 Đọc 100% Toàn Văn ({detailedContent?.paragraphs.length || 1} đoạn)
-              </span>
             </div>
 
             {ttsEngine === "vieneu" && (
@@ -1087,198 +1085,24 @@ export function ArticleDetailModal({
           </div>
         </div>
 
-        {/* View Mode Navigation Tabs */}
-        <div className="px-6 py-2 border-b flex items-center justify-between bg-black/[0.02] dark:bg-white/[0.02]">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setActiveTab("article")}
-              className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
-                activeTab === "article"
-                  ? "bg-indigo-600 text-white shadow-xs"
-                  : "text-current hover:bg-black/5 dark:hover:bg-white/5 opacity-70"
-              }`}
-            >
-              <span>📰 Bài Báo Toàn Văn</span>
-            </button>
-            <button
-              onClick={() => setActiveTab("ai_analysis")}
-              className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
-                activeTab === "ai_analysis"
-                  ? "bg-gradient-to-r from-violet-600 to-rose-500 text-white shadow-xs"
-                  : "text-current hover:bg-black/5 dark:hover:bg-white/5 opacity-70"
-              }`}
-            >
-              <span>🤖 Trợ Lý AI Phân Tích Chuyên Sâu</span>
-              <span className="size-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            </button>
-          </div>
-
-          <div className="hidden sm:flex items-center gap-1 text-[11px] opacity-75">
-            <span>Độ tin cậy:</span>
-            <span className="font-bold text-emerald-500">
-              {detailedContent?.sourceType === "live_crawled"
-                ? "100% Nguyên bản"
-                : detailedContent?.sourceType === "backend_api"
-                ? "99% Báo điện tử"
-                : "AI Đồng bộ ngữ cảnh"}
-            </span>
-          </div>
-        </div>
-
         {/* Modal Body (Scrollable Article) */}
         <div className={`flex-1 overflow-y-auto p-6 md:p-8 space-y-6 ${themeClasses.bodyBg}`}>
           {/* Article Title */}
-          <h1 className="font-['Inter:Bold'] font-extrabold text-[22px] md:text-[28px] leading-snug tracking-tight">
+          <h2 className="font-['Inter:Bold'] font-extrabold text-[22px] md:text-[28px] leading-snug tracking-tight">
             {article.title}
-          </h1>
+          </h2>
 
-          {/* Author Byline & Quick Listen */}
+          {/* Author Byline & Quick Info */}
           <div className="flex flex-wrap items-center justify-between gap-3 text-[13px] border-b pb-4 border-current/10">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="font-semibold">✍️ {detailedContent?.author || article.source || "Ban Biên Tập"}</span>
+              <span className="font-semibold">✍️ {detailedContent?.author || article.source || "Ban Biên Tập Báo Tiền Phong"}</span>
               <span>·</span>
-              <span className={themeClasses.subtext}>Đăng tải: {detailedContent?.publishedTime || "Hôm nay, 14:26"}</span>
+              <span className={themeClasses.subtext}>🕒 {detailedContent?.publishedTime || "Vừa cập nhật"}</span>
               <span>·</span>
               <span className="text-emerald-500 font-medium">✓ Đã kiểm duyệt</span>
             </div>
-            <button
-              onClick={handleToggleSpeech}
-              className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#ff315f]/10 hover:bg-[#ff315f]/20 text-[#ff315f] text-[12px] font-semibold transition-colors cursor-pointer"
-            >
-              <span>♪</span>
-              <span>{isSpeaking ? "Đang nghe" : "Nghe đọc"}</span>
-            </button>
-          </div>
-
-          {/* VieNeu-TTS v3 Turbo Audio Card (Khối phát thanh nơ-ron AI theo chuẩn người dùng) */}
-          <div className="rounded-2xl border border-current/15 bg-black/[0.03] dark:bg-white/[0.04] p-4 sm:p-5 space-y-3.5 shadow-xs">
-            {/* Badges row */}
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <span className="bg-[#ff315f] text-white text-[10px] font-black px-1.5 py-0.5 rounded shadow-xs">AI</span>
-                <span className="font-['Inter:Bold'] font-bold text-[13px] tracking-tight">VieNeu-TTS v3 Turbo</span>
-                <span className="bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full">48 kHz Studio</span>
-                <span className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full">Phạm Nguyễn Ngọc Bảo</span>
-              </div>
-              <span className="text-[11px] font-medium opacity-70">
-                {isSpeaking ? (currentChunkIndex === 0 ? "Đang đọc Sapo..." : `Đoạn ${currentChunkIndex}/${detailedContent?.paragraphs.length || 0}`) : "Sẵn sàng"}
-              </span>
-            </div>
-
-            {/* Subtitle */}
-            <p className="text-[12px] text-current/80 font-medium">
-              Bóc tách đọc trọn vẹn thân bài và Sapo (Tuyệt đối không đọc tiêu đề)
-            </p>
-
-            {/* Scrubber / Progress Bar */}
-            <div className="space-y-1">
-              <div className="flex items-center gap-3 text-[11px] text-current/70">
-                <span className="font-mono">00:00</span>
-                <div className="flex-1 relative flex items-center h-2 bg-current/15 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-[#ff315f] to-rose-500 rounded-full transition-all duration-300"
-                    style={{
-                      width: isSpeaking && speechQueueRef.current.length > 0
-                        ? `${Math.min(100, Math.round(((currentChunkIndex + 1) / speechQueueRef.current.length) * 100))}%`
-                        : "0%"
-                    }}
-                  />
-                </div>
-                <span className="font-mono">
-                  {detailedContent?.readingTimeMinutes ? `0${detailedContent.readingTimeMinutes}:00` : "02:00"}
-                </span>
-              </div>
-              <div className="flex justify-between text-[10px] opacity-60">
-                <span>{isSpeaking ? "Trực tiếp" : "Sẵn sàng"}</span>
-                <span>{detailedContent?.paragraphs.length || 0} đoạn văn</span>
-              </div>
-            </div>
-
-            {/* Controls row */}
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => {
-                    if (currentChunkIndex > 0) {
-                      playWebSpeechChunk(currentChunkIndex - 1, speechQueueRef.current, speechRate);
-                    }
-                  }}
-                  disabled={!isSpeaking || currentChunkIndex <= 0}
-                  title="Đoạn trước"
-                  className="size-8 rounded-full bg-current/10 hover:bg-current/15 text-current flex items-center justify-center font-bold text-[12px] disabled:opacity-30 cursor-pointer"
-                >
-                  «
-                </button>
-
-                <button
-                  onClick={handleToggleSpeech}
-                  data-testid="tts-toggle-btn"
-                  disabled={isTtsLoading}
-                  className={`px-4 py-2 rounded-xl font-['Inter:Bold'] font-bold text-[12px] transition-all flex items-center gap-2 cursor-pointer ${
-                    isSpeaking
-                      ? "bg-[#ff315f] text-white shadow-md shadow-[#ff315f]/30 scale-102"
-                      : isTtsLoading
-                      ? "bg-amber-500 text-white animate-pulse"
-                      : "bg-[#ff315f] text-white hover:bg-[#e02650] shadow-sm"
-                  }`}
-                >
-                  <span className="text-[13px]">{isTtsLoading ? "⏳" : isSpeaking ? "⏸️" : "▶"}</span>
-                  <span>{isTtsLoading ? "Đang tải âm thanh..." : isSpeaking ? "Tạm dừng đọc" : "Nghe đọc báo AI"}</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    if (currentChunkIndex + 1 < speechQueueRef.current.length) {
-                      playWebSpeechChunk(currentChunkIndex + 1, speechQueueRef.current, speechRate);
-                    }
-                  }}
-                  disabled={!isSpeaking || currentChunkIndex + 1 >= speechQueueRef.current.length}
-                  title="Đoạn tiếp theo"
-                  className="size-8 rounded-full bg-current/10 hover:bg-current/15 text-current flex items-center justify-center font-bold text-[12px] disabled:opacity-30 cursor-pointer"
-                >
-                  »
-                </button>
-              </div>
-
-              {/* Voice select & Speed */}
-              <div className="flex flex-wrap items-center gap-2">
-                <select
-                  value={selectedVoice}
-                  onChange={(e) => {
-                    handleStopSpeech();
-                    setSelectedVoice(e.target.value);
-                  }}
-                  className="bg-white dark:bg-slate-800 text-current border border-current/20 rounded-xl px-2.5 py-1.5 text-[11px] font-semibold outline-hidden cursor-pointer"
-                >
-                  {availableVoices.map((v) => (
-                    <option key={v.id} value={v.id}>
-                      {v.gender === "Nữ" ? "Nữ" : "Nam"} {v.region} ({v.name} - Báo chí)
-                    </option>
-                  ))}
-                </select>
-
-                <select
-                  value={speechRate}
-                  onChange={(e) => handleRateChange(parseFloat(e.target.value))}
-                  className="bg-white dark:bg-slate-800 text-current border border-current/20 rounded-xl px-2.5 py-1.5 text-[11px] font-semibold outline-hidden cursor-pointer"
-                >
-                  <option value={0.75}>0.75x (Chậm)</option>
-                  <option value={1.0}>1.0x (Chuẩn)</option>
-                  <option value={1.25}>1.25x (Nhanh)</option>
-                  <option value={1.5}>1.5x (Rất nhanh)</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Card Footer */}
-            <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-current/10 text-[11px] opacity-75">
-              <span className="flex items-center gap-1.5">
-                <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span>Động cơ: <strong>VieNeu-TTS Neural Audio</strong></span>
-              </span>
-              <span className="flex items-center gap-1">
-                <span>🎙️ Giọng Nữ (Phát thanh viên)</span>
-              </span>
+            <div className="text-[12px] opacity-75">
+              <span>Độ dài: {detailedContent?.paragraphs.length || 0} đoạn</span>
             </div>
           </div>
 
@@ -1288,6 +1112,10 @@ export function ArticleDetailModal({
               <img
                 src={article.image}
                 alt={article.title}
+                onError={(e) => {
+                  e.currentTarget.onerror = null;
+                  e.currentTarget.src = FALLBACK_NEWS_IMAGES[0];
+                }}
                 className="w-full h-full object-cover max-h-[380px]"
               />
               <div className="absolute bottom-2 right-3 bg-black/70 backdrop-blur-sm text-white text-[11px] px-2.5 py-0.5 rounded-md">
@@ -1297,24 +1125,24 @@ export function ArticleDetailModal({
           )}
 
           {/* Copilot AI Smart Summary Box */}
-          <div className="bg-gradient-to-br from-indigo-500/10 via-purple-500/10 to-pink-500/10 border border-indigo-500/30 rounded-2xl p-5 shadow-xs">
+          <div className="bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 dark:from-indigo-950/40 dark:via-purple-950/30 dark:to-pink-950/30 border border-indigo-200/70 dark:border-indigo-800/40 rounded-2xl p-5 shadow-xs">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <span className="text-[20px]">🤖</span>
-                <span className="font-['Inter:Bold'] font-bold text-[14px] uppercase tracking-wide">
+                <span className="font-['Inter:Bold'] font-bold text-indigo-950 dark:text-indigo-200 text-[13px] uppercase tracking-wide">
                   Tóm Tắt Nhanh Bởi Antigravity Copilot
                 </span>
               </div>
-              <span className="bg-indigo-600/20 text-indigo-400 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-indigo-500/30">
+              <span className="bg-indigo-600/10 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-indigo-200 dark:border-indigo-700/50">
                 AI INSIGHT
               </span>
             </div>
 
-            <div className="space-y-2 text-[13px] leading-relaxed">
+            <div className="space-y-2 text-[13px] text-indigo-950/85 dark:text-indigo-200/90 leading-relaxed">
               {(detailedContent?.keyTakeaways || [
                 `Trọng tâm sự kiện: ${article.description || article.title}`,
-                "Tác động đô thị: Ảnh hưởng trực tiếp đến lộ trình giao thông và sự chủ động của người dân Thủ đô.",
-                "Khuyến nghị từ AI: Bạn có thể cập nhật thêm thông báo từ cơ quan chức năng hoặc hỏi trực tiếp Copilot.",
+                "Tác động đô thị: Thông tin có ý nghĩa lớn đối với an toàn sinh hoạt, lộ trình giao thông và sự chủ động của người dân Thủ đô.",
+                "Khuyến nghị từ AI: Bạn có thể theo dõi thêm diễn biến trên các phương tiện truyền thông chính thống hoặc hỏi trực tiếp Copilot để cập nhật chi tiết.",
               ]).map((point, idx) => (
                 <p key={idx} className="flex items-start gap-2">
                   <span className="text-[#ff315f] font-bold">•</span>
@@ -1322,165 +1150,92 @@ export function ArticleDetailModal({
                 </p>
               ))}
             </div>
+          </div>
 
-            {/* Quick 1-Click AI Questions */}
-            <div className="mt-4 pt-3 border-t border-indigo-500/20 flex flex-wrap items-center gap-2">
-              <span className="text-[11px] font-bold text-indigo-400">Hỏi AI nhanh:</span>
-              <button
-                onClick={() => handleQuickQuestion("summary")}
-                className="px-2.5 py-1 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-600 dark:text-indigo-300 text-[11px] font-medium transition-colors cursor-pointer"
-              >
-                ⚡ Tóm tắt 30 giây
-              </button>
-              <button
-                onClick={() => handleQuickQuestion("traffic")}
-                className="px-2.5 py-1 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-600 dark:text-indigo-300 text-[11px] font-medium transition-colors cursor-pointer"
-              >
-                🚗 Tác động giao thông
-              </button>
-              <button
-                onClick={() => handleQuickQuestion("safety")}
-                className="px-2.5 py-1 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-600 dark:text-indigo-300 text-[11px] font-medium transition-colors cursor-pointer"
-              >
-                🛡️ Khuyến nghị an toàn
-              </button>
+          {/* Sa-pô / Lead Paragraph (Nội dung tóm tắt mở đầu bài viết) */}
+          {article.description && (
+            <div className={`p-4 md:p-5 rounded-2xl bg-black/[0.03] dark:bg-white/[0.03] border-l-4 border-[#ff315f] transition-all duration-300 ${
+              isSpeaking && currentChunkIndex === 0 ? "bg-[#ff315f]/10 shadow-sm" : ""
+            }`}>
+              <p className="font-bold text-[16px] md:text-[18px] leading-relaxed text-current/95 italic">
+                {article.description}
+              </p>
             </div>
+          )}
 
-            {/* Interactive AI Answer Banner */}
-            {interactiveAiAnswer && (
-              <div className="mt-3 p-3.5 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-indigo-300/40 text-[13px] leading-relaxed animate-in fade-in slide-in-from-top-1">
-                <p className="font-medium">{interactiveAiAnswer}</p>
-                <div className="flex justify-end mt-1">
-                  <button
-                    onClick={() => setInteractiveAiAnswer(null)}
-                    className="text-[10px] text-[#ff315f] hover:underline cursor-pointer"
-                  >
-                    Thu gọn ✕
-                  </button>
-                </div>
+          {/* Key Quote Box */}
+          <div className={`p-4 rounded-xl border-l-4 border-[#ff315f] italic text-[14px] ${themeClasses.quoteBg}`}>
+            {detailedContent?.quote || "“Thông tin đa chiều, chính xác và kịp thời là chìa khóa để người dân đô thị chủ động ứng phó mọi tình huống trong đời sống thường nhật.”"}
+          </div>
+
+          {/* Active Full Article Reading Status */}
+          {isSpeaking && (
+            <div className="flex items-center justify-between p-3 rounded-2xl bg-gradient-to-r from-emerald-500/15 via-teal-500/10 to-indigo-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-[12px] font-medium shadow-xs">
+              <div className="flex items-center gap-2.5">
+                <span className="size-2.5 rounded-full bg-emerald-500 animate-ping shrink-0" />
+                <span>
+                  🎙️ <strong>Đang đọc AI:</strong> {currentChunkIndex === 0 ? "Đoạn Sa-pô mở đầu" : `Đoạn thân bài ${currentChunkIndex}/${detailedContent?.paragraphs.length || 0}`} (Đọc 100% toàn văn)
+                </span>
               </div>
+              <span className="font-mono text-[11px] font-bold bg-white/50 dark:bg-black/40 px-2 py-0.5 rounded-md shrink-0">
+                {ttsEngine === "vieneu" ? "VieNeu AI 48kHz" : "Web Speech vi-VN"}
+              </span>
+            </div>
+          )}
+
+          {/* Rich Paragraphs Body (Toàn bộ 100% nội dung chi tiết bài viết) */}
+          <div className={`space-y-4 ${fontClasses} ${themeClasses.paragraph}`}>
+            {loadingDetail ? (
+              <div className="space-y-3 animate-pulse">
+                <div className="h-4 bg-current/10 rounded w-full" />
+                <div className="h-4 bg-current/10 rounded w-5/6" />
+                <div className="h-4 bg-current/10 rounded w-4/6" />
+                <div className="h-4 bg-current/10 rounded w-full" />
+                <div className="h-4 bg-current/10 rounded w-3/4" />
+              </div>
+            ) : (
+              <>
+                {detailedContent?.paragraphs.map((p, idx) => {
+                  const isThisParaActive = isSpeaking && currentChunkIndex === 1 + idx;
+                  return (
+                    <p
+                      key={idx}
+                      className={`text-justify leading-relaxed indent-6 text-[15px] md:text-[17px] transition-all duration-300 rounded-xl p-3 ${
+                        isThisParaActive
+                          ? "bg-[#ff315f]/10 border-l-4 border-[#ff315f] font-semibold text-[#ff315f] dark:text-[#ff315f] shadow-sm"
+                          : "hover:bg-black/[0.02] dark:hover:bg-white/[0.02]"
+                      }`}
+                    >
+                      {p}
+                    </p>
+                  );
+                })}
+
+                {/* Chú thích nguồn và xuất bản bài báo gốc */}
+                <div className="pt-4 border-t border-current/10 text-[14px] text-current/80 space-y-1">
+                  <p>
+                    Bài viết được phát hành chính thức bởi <strong>{detailedContent?.author || article.source || "Tòa soạn"}</strong>.
+                  </p>
+                  <p className="text-[12px] opacity-75">
+                    Để bảo đảm tính chính xác và đầy đủ nhất của toàn văn bài viết, video phóng sự và tư liệu liên quan, bạn đọc có thể truy cập trực tiếp bài báo gốc thông qua nút chuyển hướng phía dưới.
+                  </p>
+                </div>
+              </>
             )}
           </div>
 
-          {/* Conditional View: Article Mode vs AI Deep Analysis Mode */}
-          {activeTab === "article" ? (
-            <>
-              {/* Sa-pô / Lead Paragraph (Nội dung tóm tắt mở đầu bài viết) */}
-              {article.description && (
-                <div className={`p-4 md:p-5 rounded-2xl bg-black/[0.03] dark:bg-white/[0.03] border-l-4 border-[#ff315f] transition-all duration-300 ${
-                  isSpeaking && currentChunkIndex === 0 ? "bg-[#ff315f]/10 shadow-sm" : ""
-                }`}>
-                  <p className="font-bold text-[16px] md:text-[18px] leading-relaxed text-current/95 italic">
-                    {article.description}
-                  </p>
-                </div>
-              )}
-
-              {/* Key Quote Box */}
-              <div className={`p-4 rounded-xl border-l-4 border-[#ff315f] italic text-[14px] ${themeClasses.quoteBg}`}>
-                {detailedContent?.quote || "“Thông tin đa chiều, chính xác và kịp thời là chìa khóa để người dân đô thị chủ động ứng phó mọi tình huống trong đời sống thường nhật.”"}
-              </div>
-
-              {/* Active Full Article Reading Status */}
-              {isSpeaking && (
-                <div className="flex items-center justify-between p-3 rounded-2xl bg-gradient-to-r from-emerald-500/15 via-teal-500/10 to-indigo-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-[12px] font-medium shadow-xs">
-                  <div className="flex items-center gap-2.5">
-                    <span className="size-2.5 rounded-full bg-emerald-500 animate-ping shrink-0" />
-                    <span>
-                      🎙️ <strong>Đang đọc AI:</strong> {currentChunkIndex === 0 ? "Đoạn Sa-pô mở đầu" : `Đoạn thân bài ${currentChunkIndex}/${detailedContent?.paragraphs.length || 0}`} (Đọc 100% toàn văn)
-                    </span>
-                  </div>
-                  <span className="font-mono text-[11px] font-bold bg-white/50 dark:bg-black/40 px-2 py-0.5 rounded-md shrink-0">
-                    {ttsEngine === "vieneu" ? "VieNeu AI 48kHz" : "Web Speech vi-VN"}
-                  </span>
-                </div>
-              )}
-
-              {/* Rich Paragraphs Body (Toàn bộ 100% nội dung chi tiết bài viết) */}
-              <div className={`space-y-4 ${fontClasses} ${themeClasses.paragraph}`}>
-                {loadingDetail ? (
-                  <div className="space-y-3 animate-pulse">
-                    <div className="h-4 bg-current/10 rounded w-full" />
-                    <div className="h-4 bg-current/10 rounded w-5/6" />
-                    <div className="h-4 bg-current/10 rounded w-4/6" />
-                    <div className="h-4 bg-current/10 rounded w-full" />
-                    <div className="h-4 bg-current/10 rounded w-3/4" />
-                  </div>
-                ) : (
-                  <>
-                    {detailedContent?.paragraphs.map((p, idx) => {
-                      const isThisParaActive = isSpeaking && currentChunkIndex === 1 + idx;
-                      return (
-                        <p
-                          key={idx}
-                          className={`text-justify leading-relaxed indent-6 text-[15px] md:text-[17px] transition-all duration-300 rounded-xl p-3 ${
-                            isThisParaActive
-                              ? "bg-[#ff315f]/10 border-l-4 border-[#ff315f] font-semibold text-[#ff315f] dark:text-[#ff315f] shadow-sm"
-                              : "hover:bg-black/[0.02] dark:hover:bg-white/[0.02]"
-                          }`}
-                        >
-                          {p}
-                        </p>
-                      );
-                    })}
-
-                    {/* Chú thích nguồn và xuất bản bài báo gốc */}
-                    <div className="pt-4 border-t border-current/10 text-[14px] text-current/80 space-y-1">
-                      <p>
-                        Bài viết được phát hành chính thức bởi <strong>{detailedContent?.author || article.source || "Tòa soạn"}</strong>.
-                      </p>
-                      <p className="text-[12px] opacity-75">
-                        Để bảo đảm tính chính xác và đầy đủ nhất của toàn văn bài viết, video phóng sự và tư liệu liên quan, bạn đọc có thể truy cập trực tiếp bài báo gốc thông qua nút chuyển hướng phía dưới.
-                      </p>
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {/* Hashtag Tags */}
-              {detailedContent?.tags && detailedContent.tags.length > 0 && (
-                <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-current/10">
-                  <span className="text-[12px] font-bold text-current/70">Từ khóa:</span>
-                  {detailedContent.tags.map((tag, idx) => (
-                    <span
-                      key={idx}
-                      className="px-2.5 py-1 rounded-lg bg-black/5 dark:bg-white/10 text-current text-[11px] font-medium"
-                    >
-                      #{tag}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </>
-          ) : (
-            /* AI Deep Analysis Mode */
-            <div className="space-y-4 animate-in fade-in duration-200">
-              <div className="p-5 rounded-2xl bg-indigo-50/50 dark:bg-slate-900/50 border border-indigo-200/60 dark:border-indigo-900/60 space-y-2">
-                <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-bold text-[14px]">
-                  <span>📌 1. BẢN CHẤT & CỐT LÕI SỰ KIỆN</span>
-                </div>
-                <p className={`text-[14px] leading-relaxed ${themeClasses.paragraph}`}>
-                  {detailedContent?.aiAnalysis.essence}
-                </p>
-              </div>
-
-              <div className="p-5 rounded-2xl bg-amber-50/50 dark:bg-slate-900/50 border border-amber-200/60 dark:border-amber-900/60 space-y-2">
-                <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-bold text-[14px]">
-                  <span>🚗 2. TÁC ĐỘNG GIAO THÔNG & AN SINH ĐÔ THỊ</span>
-                </div>
-                <p className={`text-[14px] leading-relaxed ${themeClasses.paragraph}`}>
-                  {detailedContent?.aiAnalysis.urbanImpact}
-                </p>
-              </div>
-
-              <div className="p-5 rounded-2xl bg-emerald-50/50 dark:bg-slate-900/50 border border-emerald-200/60 dark:border-emerald-900/60 space-y-2">
-                <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-bold text-[14px]">
-                  <span>🛡️ 3. KHUYẾN NGHỊ THỰC THI & LỜI KHUYÊN AN TOÀN TỪ AI</span>
-                </div>
-                <p className={`text-[14px] leading-relaxed ${themeClasses.paragraph}`}>
-                  {detailedContent?.aiAnalysis.safetyAdvice}
-                </p>
-              </div>
+          {/* Hashtag Tags */}
+          {detailedContent?.tags && detailedContent.tags.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-current/10">
+              <span className="text-[12px] font-bold text-current/70">Từ khóa:</span>
+              {detailedContent.tags.map((tag, idx) => (
+                <span
+                  key={idx}
+                  className="px-2.5 py-1 rounded-lg bg-black/5 dark:bg-white/10 text-current text-[11px] font-medium"
+                >
+                  #{tag}
+                </span>
+              ))}
             </div>
           )}
 
