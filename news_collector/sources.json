@@ -1,0 +1,287 @@
+{
+  "categories": [
+    {
+      "id": "thoi_su_xa_hoi",
+      "name": "Thời sự, chính trị, xã hội",
+      "description": "Tin tức thời sự trong nước, chính trị, xã hội, an ninh trật tự"
+    },
+    {
+      "id": "cong_nghe_ai",
+      "name": "Công nghệ, AI, chuyển đổi số",
+      "description": "Trí tuệ nhân tạo, công nghệ thông tin, viễn thông, chuyển đổi số"
+    },
+    {
+      "id": "gioi_tre_doi_song",
+      "name": "Giới trẻ, Gen Z, đời sống",
+      "description": "Lối sống giới trẻ, xu hướng Gen Z, kỹ năng, việc làm"
+    },
+    {
+      "id": "giao_duc_tuyen_sinh",
+      "name": "Giáo dục, tuyển sinh",
+      "description": "Tuyển sinh đại học, chính sách giáo dục, học đường, du học"
+    },
+    {
+      "id": "kinh_te_tai_chinh",
+      "name": "Kinh tế, tài chính, khởi nghiệp",
+      "description": "Thị trường tài chính, chứng khoán, bất động sản, doanh nghiệp, startup"
+    },
+    {
+      "id": "giai_tri_van_hoa",
+      "name": "Giải trí, văn hóa, du lịch, thể thao",
+      "description": "Văn hóa nghệ thuật, điện ảnh, âm nhạc, du lịch, thể thao trong nước và quốc tế"
+    },
+    {
+      "id": "khoa_hoc_suc_khoe",
+      "name": "Khoa học, sức khỏe và môi trường",
+      "description": "Y tế, sức khỏe cộng đồng, dinh dưỡng, nghiên cứu khoa học, khí hậu"
+    }
+  ],
+  "sources": [
+    {
+      "id": "vnn_thoi_su",
+      "source_name": "VietNamNet - Thời sự",
+      "domain": "vietnamnet.vn",
+      "category": "thoi_su_xa_hoi",
+      "feed_url": "https://vietnamnet.vn/rss/thoi-su.rss",
+      "enabled": true
+    },
+    {
+      "id": "vnn_tin_moi",
+      "source_name": "VietNamNet - Tin mới nhất",
+      "domain": "vietnamnet.vn",
+      "category": "thoi_su_xa_hoi",
+      "feed_url": "https://vietnamnet.vn/rss/tin-moi-nhat.rss",
+      "enabled": true
+    },
+    {
+      "id": "tp_xa_hoi",
+      "source_name": "Tiền Phong - Xã hội",
+      "domain": "tienphong.vn",
+      "category": "thoi_su_xa_hoi",
+      "feed_url": "https://tienphong.vn/rss/xa-hoi-2.rss",
+      "enabled": true
+    },
+    {
+      "id": "vne_thoi_su",
+      "source_name": "VnExpress - Thời sự",
+      "domain": "vnexpress.net",
+      "category": "thoi_su_xa_hoi",
+      "feed_url": "https://vnexpress.net/rss/thoi-su.rss",
+      "enabled": true
+    },
+    {
+      "id": "dt_xa_hoi",
+      "source_name": "Dân Trí - Xã hội",
+      "domain": "dantri.com.vn",
+      "category": "thoi_su_xa_hoi",
+      "feed_url": "https://dantri.com.vn/rss/xa-hoi.rss",
+      "enabled": true
+    },
+    {
+      "id": "tt_thoi_su",
+      "source_name": "Tuổi Trẻ - Thời sự",
+      "domain": "tuoitre.vn",
+      "category": "thoi_su_xa_hoi",
+      "feed_url": "https://tuoitre.vn/rss/thoi-su.rss",
+      "enabled": true
+    },
+
+    {
+      "id": "vne_so_hoa",
+      "source_name": "VnExpress - Số hóa (Công nghệ & AI)",
+      "domain": "vnexpress.net",
+      "category": "cong_nghe_ai",
+      "feed_url": "https://vnexpress.net/rss/so-hoa.rss",
+      "enabled": true
+    },
+    {
+      "id": "vnn_cong_nghe",
+      "source_name": "VietNamNet - Công nghệ",
+      "domain": "vietnamnet.vn",
+      "category": "cong_nghe_ai",
+      "feed_url": "https://vietnamnet.vn/rss/cong-nghe.rss",
+      "enabled": true
+    },
+    {
+      "id": "tt_nhip_song_so",
+      "source_name": "Tuổi Trẻ - Nhịp sống số",
+      "domain": "tuoitre.vn",
+      "category": "cong_nghe_ai",
+      "feed_url": "https://tuoitre.vn/rss/nhip-song-so.rss",
+      "enabled": true
+    },
+    {
+      "id": "genk_feed",
+      "source_name": "GenK - Công nghệ & Trí tuệ nhân tạo",
+      "domain": "genk.vn",
+      "category": "cong_nghe_ai",
+      "feed_url": "https://genk.vn/rss.chn",
+      "enabled": true
+    },
+
+    {
+      "id": "tp_gioi_tre",
+      "source_name": "Tiền Phong - Giới trẻ",
+      "domain": "tienphong.vn",
+      "category": "gioi_tre_doi_song",
+      "feed_url": "https://tienphong.vn/rss/gioi-tre-4.rss",
+      "enabled": true
+    },
+    {
+      "id": "dt_nhip_song_tre",
+      "source_name": "Dân Trí - Nhịp sống trẻ",
+      "domain": "dantri.com.vn",
+      "category": "gioi_tre_doi_song",
+      "feed_url": "https://dantri.com.vn/rss/nhip-song-tre.rss",
+      "enabled": true
+    },
+    {
+      "id": "vne_doi_song",
+      "source_name": "VnExpress - Đời sống",
+      "domain": "vnexpress.net",
+      "category": "gioi_tre_doi_song",
+      "feed_url": "https://vnexpress.net/rss/doi-song.rss",
+      "enabled": true
+    },
+    {
+      "id": "k14_doi_song",
+      "source_name": "Kênh 14 - Đời sống Gen Z",
+      "domain": "kenh14.vn",
+      "category": "gioi_tre_doi_song",
+      "feed_url": "https://kenh14.vn/doi-song.rss",
+      "enabled": true
+    },
+
+    {
+      "id": "vne_giao_duc",
+      "source_name": "VnExpress - Giáo dục",
+      "domain": "vnexpress.net",
+      "category": "giao_duc_tuyen_sinh",
+      "feed_url": "https://vnexpress.net/rss/giao-duc.rss",
+      "enabled": true
+    },
+    {
+      "id": "dt_giao_duc",
+      "source_name": "Dân Trí - Giáo dục",
+      "domain": "dantri.com.vn",
+      "category": "giao_duc_tuyen_sinh",
+      "feed_url": "https://dantri.com.vn/rss/giao-duc.rss",
+      "enabled": true
+    },
+    {
+      "id": "tt_giao_duc",
+      "source_name": "Tuổi Trẻ - Giáo dục",
+      "domain": "tuoitre.vn",
+      "category": "giao_duc_tuyen_sinh",
+      "feed_url": "https://tuoitre.vn/rss/giao-duc.rss",
+      "enabled": true
+    },
+    {
+      "id": "tp_giao_duc",
+      "source_name": "Tiền Phong - Giáo dục",
+      "domain": "tienphong.vn",
+      "category": "giao_duc_tuyen_sinh",
+      "feed_url": "https://tienphong.vn/rss/giao-duc-71.rss",
+      "enabled": true
+    },
+
+    {
+      "id": "vne_kinh_doanh",
+      "source_name": "VnExpress - Kinh doanh",
+      "domain": "vnexpress.net",
+      "category": "kinh_te_tai_chinh",
+      "feed_url": "https://vnexpress.net/rss/kinh-doanh.rss",
+      "enabled": true
+    },
+    {
+      "id": "cafef_tai_chinh",
+      "source_name": "CafeF - Tài chính & Chứng khoán",
+      "domain": "cafef.vn",
+      "category": "kinh_te_tai_chinh",
+      "feed_url": "https://cafef.vn/tai-chinh-ngan-hang.rss",
+      "enabled": true
+    },
+    {
+      "id": "cafebiz_startup",
+      "source_name": "CafeBiz - Khởi nghiệp & Kinh doanh",
+      "domain": "cafebiz.vn",
+      "category": "kinh_te_tai_chinh",
+      "feed_url": "https://cafebiz.vn/khoi-nghiep.rss",
+      "enabled": true
+    },
+    {
+      "id": "tp_kinh_te",
+      "source_name": "Tiền Phong - Kinh tế",
+      "domain": "tienphong.vn",
+      "category": "kinh_te_tai_chinh",
+      "feed_url": "https://tienphong.vn/rss/kinh-te-3.rss",
+      "enabled": true
+    },
+
+    {
+      "id": "vne_giai_tri",
+      "source_name": "VnExpress - Giải trí",
+      "domain": "vnexpress.net",
+      "category": "giai_tri_van_hoa",
+      "feed_url": "https://vnexpress.net/rss/giai-tri.rss",
+      "enabled": true
+    },
+    {
+      "id": "tt_giai_tri",
+      "source_name": "Tuổi Trẻ - Giải trí",
+      "domain": "tuoitre.vn",
+      "category": "giai_tri_van_hoa",
+      "feed_url": "https://tuoitre.vn/rss/giai-tri.rss",
+      "enabled": true
+    },
+    {
+      "id": "vne_du_lich",
+      "source_name": "VnExpress - Du lịch",
+      "domain": "vnexpress.net",
+      "category": "giai_tri_van_hoa",
+      "feed_url": "https://vnexpress.net/rss/du-lich.rss",
+      "enabled": true
+    },
+    {
+      "id": "tp_the_thao",
+      "source_name": "Tiền Phong - Thể thao",
+      "domain": "tienphong.vn",
+      "category": "giai_tri_van_hoa",
+      "feed_url": "https://tienphong.vn/rss/the-thao-11.rss",
+      "enabled": true
+    },
+
+    {
+      "id": "vne_suc_khoe",
+      "source_name": "VnExpress - Sức khỏe",
+      "domain": "vnexpress.net",
+      "category": "khoa_hoc_suc_khoe",
+      "feed_url": "https://vnexpress.net/rss/suc-khoe.rss",
+      "enabled": true
+    },
+    {
+      "id": "vne_khoa_hoc",
+      "source_name": "VnExpress - Khoa học & Môi trường",
+      "domain": "vnexpress.net",
+      "category": "khoa_hoc_suc_khoe",
+      "feed_url": "https://vnexpress.net/rss/khoa-hoc.rss",
+      "enabled": true
+    },
+    {
+      "id": "dt_suc_khoe",
+      "source_name": "Dân Trí - Sức khỏe",
+      "domain": "dantri.com.vn",
+      "category": "khoa_hoc_suc_khoe",
+      "feed_url": "https://dantri.com.vn/rss/suc-khoe.rss",
+      "enabled": true
+    },
+    {
+      "id": "tt_suc_khoe",
+      "source_name": "Tuổi Trẻ - Sức khỏe",
+      "domain": "tuoitre.vn",
+      "category": "khoa_hoc_suc_khoe",
+      "feed_url": "https://tuoitre.vn/rss/suc-khoe.rss",
+      "enabled": true
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-﻿# Environment & Secrets
+# Environment & Secrets
 .env
 *.env
 credentials.json
@@ -17,3 +17,5 @@ ENV/
 bot_data.json
 core_logic_memory.txt
 *.log
+*.db
+exports/
