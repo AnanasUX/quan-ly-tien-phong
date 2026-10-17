@@ -2394,144 +2394,421 @@ def telegram_generic_webhook():
 def ping():
     return "Pong", 200
 
+BOILERPLATE_SKIP_PHRASES = [
+    'liên hệ', 'bản quyền', 'hotline', 'quảng cáo', 'tải app',
+    'email:', 'đường dây nóng', 'vui lòng nhập đủ', 'link bài gốc',
+    'tổng biên tập', 'giấy phép xuất bản', 'cấm sao chép', 'chia sẻ bài viết',
+    'xem thêm:', 'tin liên quan:', 'bài viết liên quan:', 'đọc tiếp:',
+    'xem các bài viết của tác giả', 'bình luận', 'ý kiến bạn đọc', 'báo điện tử'
+]
+
+def _clean_str(text):
+    if not text:
+        return ""
+    return re.sub(r'\s+', ' ', text).strip()
+
+def _clean_author_str(author):
+    if not author:
+        return ""
+    a = _clean_str(author)
+    a = re.sub(r'(?i)xem các bài viết của tác giả.*$', '', a).strip()
+    a = re.sub(r'(?i)^(tác giả|phóng viên|bài|ảnh|theo|nguồn)\s*:\s*', '', a).strip()
+    return a
+
+def _resolve_best_img(img_tag, base_url=""):
+    if not img_tag:
+        return ""
+    candidates = [
+        img_tag.get('data-large-src'),
+        img_tag.get('data-src'),
+        img_tag.get('data-original'),
+        img_tag.get('data-lazy-src'),
+        img_tag.get('data-actualsrc'),
+        img_tag.get('data-cdn-src'),
+        img_tag.get('src')
+    ]
+    for c in candidates:
+        if c and not c.startswith('data:') and 'blank.gif' not in c and '1x1' not in c and 'placeholder' not in c:
+            c = c.strip()
+            if c.startswith('//'):
+                return 'https:' + c
+            if c.startswith('/') and base_url:
+                try:
+                    return urllib.parse.urljoin(base_url, c)
+                except Exception:
+                    pass
+            return c
+    srcset = img_tag.get('data-srcset') or img_tag.get('srcset')
+    if srcset:
+        parts = srcset.split(',')
+        if parts:
+            c = parts[-1].strip().split(' ')[0]
+            if c and not c.startswith('data:'):
+                if c.startswith('//'): return 'https:' + c
+                if c.startswith('/') and base_url:
+                    try: return urllib.parse.urljoin(base_url, c)
+                    except: pass
+                return c
+    return ""
+
 def trich_xuat_noi_dung_bai_bao(url, title="", description=""):
     """
-    Trích xuất toàn văn 100% nội dung bài báo, các đoạn văn, hình ảnh và thông tin chi tiết.
-    Loại trừ chính xác các thanh điều hướng (như justify-content-sb) để đảm bảo lấy đầy đủ thân bài.
+    Trích xuất toàn văn 100% nội dung bài báo theo chiến lược 5 tầng:
+    1. Schema JSON-LD (NewsArticle, Article, BlogPosting)
+    2. Thẻ ngữ nghĩa <article>, <main>
+    3. CSS Selectors chuẩn báo chí Việt Nam (#maincontent, .detail-content, .article__body, .fck_detail...)
+    4. Domain-specific rules (Tiền Phong phóng sự ảnh, VietnamNet, Soha, Dân Trí, VnExpress...)
+    5. Phân tích mật độ văn bản (heuristic density)
+    Trả về dữ liệu chuẩn JSON không cắt ngắn và không tạo văn bản nhân tạo giả mạo.
     """
-    paragraphs = []
-    author = ""
-    pub_time = ""
-    sapo = ""
+    now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    now_str = datetime.datetime.now().strftime("%H:%M %d/%m/%Y")
     
-    if url and url != "#" and url.startswith("http"):
+    result = {
+        "source_name": "",
+        "article_url": url,
+        "canonical_url": url,
+        "title": title or "",
+        "author": "",
+        "published_at": "",
+        "updated_at": "",
+        "summary": description or "",
+        "content_html": "",
+        "content_text": "",
+        "headings": [],
+        "images": [],
+        "content_status": "failed",
+        "extraction_method": "rss_only",
+        "extraction_error": None,
+        "paragraph_count": 0,
+        "content_length": 0,
+        "fetched_at": now_iso,
+        # Giữ các key cũ để tương thích 100% frontend & bot telegram
+        "url": url,
+        "paragraphs": [],
+        "sapo": description or "",
+        "published_time": now_str,
+        "total_paragraphs": 0
+    }
+
+    if not url or url == "#" or not url.startswith("http"):
+        result["extraction_error"] = "URL không hợp lệ hoặc rỗng"
+        result["content_status"] = "failed"
+        return result
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Cache-Control": "no-cache"
+    }
+
+    resp = None
+    last_err = None
+    for attempt in range(2):
         try:
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
-            }
-            resp = requests.get(url, headers=headers, timeout=6.0)
+            resp = requests.get(url, headers=headers, timeout=8.0, allow_redirects=True)
             if resp.status_code == 200:
-                resp.encoding = resp.apparent_encoding or 'utf-8'
-                soup = BeautifulSoup(resp.text, 'html.parser')
-                
-                # Tìm tác giả
-                author_el = soup.find(class_=lambda c: c and any(k in str(c).lower() for k in ['author', 'tac-gia', 'byline', 'journalist']))
-                if author_el:
-                    author = author_el.get_text().strip()
-                
-                # Tìm thời gian
-                time_el = soup.find(class_=lambda c: c and any(k in str(c).lower() for k in ['date', 'time', 'publish', 'ngay-dang'])) or soup.find('time')
-                if time_el:
-                    pub_time = time_el.get_text().strip()
+                break
+        except Exception as e:
+            last_err = str(e)
 
-                # Tìm Sapo
-                sapo_el = soup.find(class_=lambda c: c and any(k in str(c).lower() for k in ['sapo', 'lead', 'summary', 'detail-sapo']))
-                if sapo_el:
-                    sapo = sapo_el.get_text().strip()
-                
-                # Tìm container bài viết tốt nhất bằng cách duyệt các selector chuẩn báo chí
-                candidate_selectors = [
-                    "article",
-                    ".detail-content",
-                    ".detail-body",
-                    ".news-detail",
-                    ".article-content",
-                    ".article-body",
-                    ".fck_detail",
-                    ".content-detail",
-                    ".entry-content",
-                    ".post-content",
-                    "main"
-                ]
-                best_container = None
-                max_p = 0
-                for sel in candidate_selectors:
-                    for el in soup.select(sel):
-                        valid_p = [p for p in el.find_all('p') if len(p.get_text().strip()) > 30]
-                        if len(valid_p) > max_p:
-                            max_p = len(valid_p)
-                            best_container = el
+    if resp is None:
+        result["extraction_error"] = f"Lỗi kết nối sau 2 lần thử: {last_err}"
+        result["content_status"] = "failed"
+        return result
 
-                target_container = best_container if best_container else soup
-                for p in target_container.find_all('p'):
-                    txt = p.get_text().strip()
-                    if len(txt) > 30 and not any(skip in txt.lower() for skip in ['liên hệ', 'bản quyền', 'hotline', 'quảng cáo', 'tải app', 'email:', 'đường dây nóng', 'vui lòng nhập đủ', 'link bài gốc']):
-                        paragraphs.append(txt)
+    if resp.status_code in [403, 429]:
+        result["extraction_error"] = f"Bị chặn bởi server nguồn (HTTP {resp.status_code})"
+        result["content_status"] = "blocked"
+        return result
+    elif resp.status_code != 200:
+        result["extraction_error"] = f"Lỗi HTTP {resp.status_code}"
+        result["content_status"] = "failed"
+        return result
 
-                # Thu thập chú thích ảnh (figcaptions) cho các bài viết dạng phóng sự ảnh / photo stories
-                seen_captions = set(p.lower().strip() for p in paragraphs)
-                for fc in soup.find_all(['figcaption', 'span', 'p']):
-                    classes = ' '.join(fc.get('class', []))
-                    if fc.name == 'figcaption' or any(c in classes.lower() for c in ['caption', 'desc']):
-                        txt = fc.get_text().strip()
-                        if len(txt) > 25 and txt.lower().strip() not in seen_captions and not any(skip in txt.lower() for skip in ['liên hệ', 'bản quyền', 'hotline', 'quảng cáo', 'tổng biên tập', 'giấy phép']):
-                            seen_captions.add(txt.lower().strip())
-                            paragraphs.append(txt)
+    html_text = resp.text
+    if any(cf in html_text.lower() for cf in ['cf-browser-verification', 'ray id:', 'checking your browser before accessing', 'just a moment...']):
+        result["extraction_error"] = "Bị chặn bởi Cloudflare / Anti-bot"
+        result["content_status"] = "blocked"
+        return result
 
-                # Nếu là bài phóng sự ảnh hoặc bài trích dẫn nguồn có ít đoạn văn (< 3), kiểm tra link bài gốc
-                if len(paragraphs) < 3:
-                    import re
-                    body_text = soup.get_text()
-                    source_match = re.search(r'(?:Link bài gốc|Nguồn|Theo)\s*:\s*(https?://[^\s<"\']+)', body_text)
-                    if source_match:
-                        try:
-                            s_url = source_match.group(1)
-                            s_resp = requests.get(s_url, headers=headers, timeout=5.0)
-                            if s_resp.status_code == 200:
-                                s_resp.encoding = s_resp.apparent_encoding or 'utf-8'
-                                s_soup = BeautifulSoup(s_resp.text, 'html.parser')
-                                for s_fc in s_soup.find_all(['figcaption', 'span', 'p']):
-                                    s_classes = ' '.join(s_fc.get('class', []))
-                                    if s_fc.name == 'figcaption' or any(c in s_classes.lower() for c in ['caption', 'desc']):
-                                        s_txt = s_fc.get_text().strip()
-                                        if len(s_txt) > 25 and s_txt.lower().strip() not in seen_captions and not any(skip in s_txt.lower() for skip in ['liên hệ', 'bản quyền', 'hotline', 'tổng biên tập', 'giấy phép']):
-                                            seen_captions.add(s_txt.lower().strip())
-                                            paragraphs.append(s_txt)
-                        except Exception:
-                            pass
+    resp.encoding = resp.apparent_encoding or 'utf-8'
+    soup = BeautifulSoup(resp.text, 'html.parser')
+
+    # Canonical URL
+    canon_el = soup.find('link', rel='canonical')
+    canonical_url = canon_el.get('href', url).strip() if canon_el else resp.url
+    result["canonical_url"] = canonical_url
+
+    # Hostname / Source name
+    domain = urllib.parse.urlparse(canonical_url).netloc.lower()
+    if 'tienphong.vn' in domain: result["source_name"] = "Tiền Phong"
+    elif 'vietnamnet.vn' in domain: result["source_name"] = "VietnamNet"
+    elif 'dantri.com.vn' in domain: result["source_name"] = "Dân Trí"
+    elif 'vnexpress.net' in domain: result["source_name"] = "VnExpress"
+    elif 'tuoitre.vn' in domain: result["source_name"] = "Tuổi Trẻ"
+    elif 'thanhnien.vn' in domain: result["source_name"] = "Thanh Niên"
+    elif 'soha.vn' in domain: result["source_name"] = "Soha"
+    elif 'vtv.vn' in domain: result["source_name"] = "VTV News"
+    elif 'laodong.vn' in domain: result["source_name"] = "Lao Động"
+    elif 'plo.vn' in domain: result["source_name"] = "Pháp Luật TP.HCM"
+    elif 'baogiaothong.vn' in domain: result["source_name"] = "Báo Giao Thông"
+    elif 'kenh14.vn' in domain: result["source_name"] = "Kênh 14"
+    else: result["source_name"] = domain.replace('www.', '')
+
+    # Page Title
+    h1 = soup.find('h1')
+    og_title = soup.find('meta', property='og:title')
+    extracted_title = _clean_str(h1.get_text() if h1 else (og_title.get('content', '') if og_title else ''))
+    if extracted_title:
+        result["title"] = extracted_title
+
+    # Published date & Updated date
+    pub_date = ""
+    time_meta = soup.find('meta', property=lambda p: p and 'published_time' in p.lower())
+    if time_meta and time_meta.get('content'):
+        pub_date = time_meta['content'].strip()
+    if not pub_date:
+        time_tag = soup.find('time')
+        if time_tag:
+            pub_date = _clean_str(time_tag.get('datetime', '') or time_tag.get_text())
+    if not pub_date:
+        date_el = soup.find(class_=lambda c: c and any(k in str(c).lower() for k in ['date-time', 'datetime', 'dt-text-13px', 'publish-date']))
+        if date_el:
+            pub_date = _clean_str(date_el.get_text())
+
+    # Sapo
+    sapo_el = soup.find(class_=lambda c: c and any(k in str(c).lower() for k in ['sapo', 'lead', 'detail-sapo', 'singular-sapo', 'content-detail-sapo', 'article__sapo']))
+    if not sapo_el:
+        sapo_el = soup.find('h2', class_=lambda c: c and any(k in str(c).lower() for k in ['sapo', 'lead', 'description']))
+    sapo_text = _clean_str(sapo_el.get_text()) if sapo_el else _clean_str(description)
+    result["summary"] = sapo_text
+    result["sapo"] = sapo_text
+
+    # Author
+    author_text = ""
+    author_el = soup.find(class_=lambda c: c and any(k in str(c).lower() for k in ['author', 'tac-gia', 'byline', 'journalist', 'article__author', 'details__author']))
+    if not author_el:
+        author_el = soup.find('a', rel='author') or soup.find(attrs={"itemprop": "author"})
+    if author_el:
+        author_text = _clean_author_str(author_el.get_text())
+
+    # Check Schema JSON-LD (Tầng 1)
+    json_ld_body = ""
+    for s in soup.find_all('script', type='application/ld+json'):
+        try:
+            raw_s = s.string or s.get_text() or ''
+            clean_s = re.sub(r'[\x00-\x1f\x7f-\x9f]', lambda m: ' ' if m.group() in '\n\r' else '', raw_s).strip()
+            if not clean_s: continue
+            data = json.loads(clean_s)
+            items = data if isinstance(data, list) else (data.get('@graph', [data]) if isinstance(data, dict) else [])
+            for it in items:
+                if not isinstance(it, dict): continue
+                t = it.get('@type', '')
+                if any(x in str(t) for x in ['NewsArticle', 'Article', 'BlogPosting']):
+                    if it.get('articleBody') and len(it['articleBody']) > len(json_ld_body):
+                        json_ld_body = it['articleBody']
+                    if not author_text and it.get('author'):
+                        a = it['author']
+                        a_name = a.get('name', '') if isinstance(a, dict) else (a[0].get('name', '') if isinstance(a, list) and isinstance(a[0], dict) else str(a))
+                        author_text = _clean_author_str(a_name)
+                    if not pub_date and it.get('datePublished'):
+                        pub_date = str(it['datePublished'])
+                    if it.get('dateModified'):
+                        result["updated_at"] = str(it['dateModified'])
         except Exception:
             pass
 
-    if len(paragraphs) < 2:
-        title_lower = (title + " " + description).lower()
-        if "tô lâm" in title_lower or "thụy sĩ" in title_lower or "hồ gươm" in title_lower:
-            paragraphs = [
-                "Tối 17/10, trong khuôn khổ chuyến thăm chính thức Việt Nam của Tổng thống Liên bang Thụy Sĩ Guy Parmelin, Tổng Bí thư, Chủ tịch nước Tô Lâm và Phu nhân Ngô Phương Ly cùng Tổng thống Thụy Sĩ Guy Parmelin và Phu nhân đã đi dạo phố đi bộ hồ Hoàn Kiếm (Hà Nội).",
-                "Tại không gian văn hóa phố đi bộ Hồ Gươm, hai nhà lãnh đạo cùng hai Phu nhân đã hòa mình vào không khí sôi động, ấm áp và thân thiện của người dân Thủ đô và du khách quốc tế.",
-                "Tổng Bí thư, Chủ tịch nước Tô Lâm đã giới thiệu với Tổng thống Thụy Sĩ Guy Parmelin về lịch sử nghìn năm văn hiến của Thăng Long - Hà Nội, cũng như các giá trị văn hóa truyền thống đặc sắc của dân tộc Việt Nam được gìn giữ qua nhiều thế hệ.",
-                "Đặc biệt, đoàn đã dừng chân chiêm ngưỡng chiếc 'Đồng hồ hoa Thụy Sĩ' khổng lồ bên bờ hồ Hoàn Kiếm. Đây là món quà mang ý nghĩa sâu sắc của Thị trưởng thành phố Bern (Thụy Sĩ) trao tặng Thủ đô Hà Nội nhân dịp Đại lễ 1.000 năm Thăng Long - Hà Nội năm 2010, biểu trưng cho tình hữu nghị bền chặt giữa nhân dân hai nước.",
-                "Tại các gian hàng nghệ thuật dân gian, Tổng thống Guy Parmelin cùng Phu nhân bày tỏ sự thích thú đặc biệt với sản phẩm tò he truyền thống do các nghệ nhân làng nghề Xuân La sáng tạo nên - nét văn hóa dân gian Việt Nam độc đáo trên phố đi bộ hồ Hoàn Kiếm.",
-                "Các nghệ sĩ ký họa đường phố cũng đã trân trọng vẽ và trao tặng Tổng thống Thụy Sĩ và Phu nhân những bức tranh chân dung độc đáo làm kỷ niệm trong chuyến dạo bước đáng nhớ quanh Hồ Gươm.",
-                "Chuyến dạo bộ diễn ra trong bầu không khí thân tình, cởi mở, thể hiện sự mến khách của người dân Việt Nam và thắt chặt hơn nữa quan hệ hữu nghị truyền thống, hợp tác nhiều mặt giữa Việt Nam và Thụy Sĩ."
-            ]
-        elif "startup" in title_lower or "mercor" in title_lower or "tỷ phú" in title_lower:
-            paragraphs = [
-                "Ở tuổi 22, Surya Midha trở thành tỷ phú tự thân trẻ nhất thế giới sau khi startup AI do anh đồng sáng lập đạt mức định giá 10 tỷ USD chỉ sau 2 năm thành lập.",
-                "Surya Midha cùng 3 người bạn đã sáng lập ra Mercor khi còn là sinh viên. Nhận thấy tiềm năng bùng nổ của AI thế hệ mới, Midha đã quyết định rời giảng đường đại học để dồn toàn lực phát triển doanh nghiệp.",
-                "Mercor được thành lập với ý tưởng ban đầu là sử dụng AI để hỗ trợ doanh nghiệp tuyển dụng và tìm kiếm nhân sự công nghệ chất lượng cao trên quy mô toàn cầu.",
-                "Nền tảng này nhanh chóng thu hút sự quan tâm của hàng trăm doanh nghiệp công nghệ nhờ khả năng tự động hóa quy trình phỏng vấn và đánh giá năng lực ứng viên chính xác.",
-                "Việc Mercor được định giá 10 tỷ USD đã đưa ba nhà sáng lập vào danh sách những tỷ phú tự thân trẻ tuổi nhất lịch sử thế giới công nghệ."
-            ]
-        elif description and len(description) > 20:
-            paragraphs = [
-                description,
-                f"Theo ghi nhận thực tế từ các phóng viên, sự kiện '{title}' đang thu hút sự chú ý đặc biệt của đông đảo cộng đồng độc giả và các chuyên gia trong ngành.",
-                "Các cơ quan chức năng và đơn vị chuyên trách đã nhanh chóng triển khai các biện pháp đồng bộ, phối hợp chặt chẽ nhằm đánh giá toàn diện tình hình.",
-                "Tòa soạn tiếp tục theo dõi sát sao và gửi tới quý độc giả các thông tin cập nhật mới nhất trong các bản tin tiếp theo."
-            ]
-        else:
-            paragraphs = [f"{title}. Bản tin chi tiết đang được các phóng viên và biên tập viên liên tục cập nhật."]
+    if author_text:
+        result["author"] = author_text
+    else:
+        result["author"] = result["source_name"] or "Ban Biên Tập"
 
-    return {
-        "url": url,
-        "title": title,
-        "author": author or "Ban Thời Sự",
-        "published_time": pub_time or datetime.datetime.now().strftime("%H:%M %d/%m/%Y"),
-        "sapo": sapo or description,
+    if pub_date:
+        result["published_at"] = pub_date
+        result["published_time"] = pub_date
+
+    # Pre-cleaning: Remove scripts, styles, ads, social boxes, recommend/related widgets
+    for junk in soup.find_all(['script', 'style', 'noscript', 'nav', 'footer', 'header', 'iframe']):
+        junk.decompose()
+    for ad in soup.find_all(class_=lambda c: c and any(k in str(c).lower() for k in [
+        'ads', 'banner', 'comment', 'social', 'breadcrumb', 'box-author', 'qc',
+        'recommend', 'tin-lien-quan', 'relate', 'video-shorts', 'box-related',
+        'bottom-info', 'morenews', 'zone--highlight', 'sidebar'
+    ])):
+        ad.decompose()
+
+    # Tầng 3 & 4: CSS Selectors & Domain-specific selectors
+    priority_selectors = [
+        "#maincontent", ".maincontent", "#main-detail-body",
+        ".detail-content", ".detail-body", ".content-detail",
+        "article.fck_detail", ".fck_detail",
+        ".article__body", ".article-body", ".article-content",
+        ".knc-content", ".singular-content", ".the-article-body",
+        ".post-content", ".entry-content", ".news-content",
+        "[data-role='content']"
+    ]
+    generic_selectors = ["article", "main"]
+
+    best_container = None
+    best_score = 0
+    extraction_method = "css_selector"
+
+    # Ưu tiên các selector thân bài cụ thể trước
+    for sel in priority_selectors:
+        for el in soup.select(sel):
+            p_tags = el.find_all('p')
+            fig_tags = el.find_all('figure')
+            valid_p = [p for p in p_tags if len(p.get_text().strip()) > 25 and not any(skip in p.get_text().lower() for skip in BOILERPLATE_SKIP_PHRASES)]
+            valid_fig = [f for f in fig_tags if f.find('img')]
+            score = len(valid_p) * 10 + len(valid_fig) * 8 + len(el.get_text().strip()) // 50
+            if score > best_score:
+                best_score = score
+                best_container = el
+                extraction_method = f"css_selector: {sel}"
+
+    # Nếu selector cụ thể chưa đủ tốt (score < 15), mới xét tới article hoặc main
+    if best_score < 15:
+        for sel in generic_selectors:
+            for el in soup.select(sel):
+                p_tags = el.find_all('p')
+                fig_tags = el.find_all('figure')
+                valid_p = [p for p in p_tags if len(p.get_text().strip()) > 25 and not any(skip in p.get_text().lower() for skip in BOILERPLATE_SKIP_PHRASES)]
+                valid_fig = [f for f in fig_tags if f.find('img')]
+                score = len(valid_p) * 10 + len(valid_fig) * 8 + len(el.get_text().strip()) // 50
+                if score > best_score:
+                    best_score = score
+                    best_container = el
+                    extraction_method = f"semantic: {sel}"
+
+    # Tầng 5: Heuristic density fallback nếu vẫn chưa tìm thấy container đạt chuẩn
+    if not best_container or best_score < 15:
+        max_density = 0
+        for el in soup.find_all(['div', 'section', 'article', 'main']):
+            if el.name == 'body': continue
+            p_list = [p for p in el.find_all('p') if len(p.get_text().strip()) > 25]
+            density = len(p_list) * 10 + len(el.get_text().strip()) // 100
+            if density > max_density:
+                max_density = density
+                best_container = el
+                extraction_method = "heuristic_density"
+
+    target = best_container if best_container else soup
+
+    # Trích xuất toàn bộ: p, h2-h4, blockquote, ul/ol/li, figure/img/figcaption
+    paragraphs = []
+    headings = []
+    images = []
+    html_parts = []
+    seen_texts = set()
+
+    # Đưa Sapo lên đầu nếu hợp lệ
+    if sapo_text and len(sapo_text) > 30:
+        seen_texts.add(sapo_text.lower())
+        paragraphs.append(sapo_text)
+        html_parts.append(f'<p class="article-sapo font-semibold">{sapo_text}</p>')
+
+    for child in target.descendants:
+        if not hasattr(child, 'name') or not child.name:
+            continue
+        tag = child.name.lower()
+
+        if tag in ['h2', 'h3', 'h4']:
+            txt = _clean_str(child.get_text())
+            if txt and len(txt) > 5 and txt.lower() not in seen_texts and not any(skip in txt.lower() for skip in BOILERPLATE_SKIP_PHRASES):
+                seen_texts.add(txt.lower())
+                headings.append(txt)
+                html_parts.append(f'<{tag}>{txt}</{tag}>')
+
+        elif tag == 'blockquote':
+            txt = _clean_str(child.get_text())
+            if txt and len(txt) > 15 and txt.lower() not in seen_texts and not any(skip in txt.lower() for skip in BOILERPLATE_SKIP_PHRASES):
+                seen_texts.add(txt.lower())
+                paragraphs.append(txt)
+                html_parts.append(f'<blockquote>{txt}</blockquote>')
+
+        elif tag == 'p':
+            txt = _clean_str(child.get_text())
+            if len(txt) > 25 and not any(skip in txt.lower() for skip in BOILERPLATE_SKIP_PHRASES):
+                if txt.lower() not in seen_texts:
+                    seen_texts.add(txt.lower())
+                    paragraphs.append(txt)
+                    html_parts.append(f'<p>{txt}</p>')
+
+        elif tag == 'figure' or (tag == 'div' and child.find('img') and (child.find('figcaption') or any(c in ' '.join(child.get('class', [])).lower() for c in ['caption', 'desc', 'photo']))):
+            img_el = child.find('img')
+            img_url = _resolve_best_img(img_el, canonical_url)
+            caption_el = child.find('figcaption') or child.find(class_=lambda c: c and any(k in str(c).lower() for k in ['caption', 'desc']))
+            caption_text = _clean_str(caption_el.get_text() if caption_el else (img_el.get('title') or img_el.get('alt') or ''))
+            alt_text = _clean_str(img_el.get('alt', '') if img_el else '')
+            if img_url:
+                images.append({
+                    "url": img_url,
+                    "caption": caption_text,
+                    "alt": alt_text
+                })
+                img_html = f'<figure><img src="{img_url}" alt="{alt_text}" />'
+                if caption_text:
+                    img_html += f'<figcaption>{caption_text}</figcaption>'
+                    if len(caption_text) > 25 and caption_text.lower() not in seen_texts and not any(skip in caption_text.lower() for skip in BOILERPLATE_SKIP_PHRASES):
+                        seen_texts.add(caption_text.lower())
+                        paragraphs.append(caption_text)
+                img_html += '</figure>'
+                html_parts.append(img_html)
+
+        elif tag in ['ul', 'ol']:
+            items = []
+            for li in child.find_all('li', recursive=False):
+                li_text = _clean_str(li.get_text())
+                if li_text and len(li_text) > 10 and li_text.lower() not in seen_texts and not any(skip in li_text.lower() for skip in BOILERPLATE_SKIP_PHRASES):
+                    seen_texts.add(li_text.lower())
+                    items.append(f'<li>{li_text}</li>')
+                    paragraphs.append(f"• {li_text}")
+            if items:
+                html_parts.append(f'<{tag}>{"".join(items)}</{tag}>')
+
+    # Nếu sau khi quét HTML vẫn có ít hơn 2 đoạn, nhưng JSON-LD có articleBody
+    if len(paragraphs) < 2 and json_ld_body and len(json_ld_body) > 100:
+        extraction_method = "schema_jsonld"
+        raw_paras = [_clean_str(p) for p in re.split(r'\n+|\r+', json_ld_body) if len(_clean_str(p)) > 25]
+        if raw_paras:
+            paragraphs = raw_paras
+            html_parts = [f'<p>{p}</p>' for p in paragraphs]
+
+    # Đánh giá content_status trung thực (Tuyệt đối không bịa đặt text giả)
+    content_text = "\n\n".join(paragraphs).strip()
+    content_html = "\n".join(html_parts).strip()
+    p_count = len(paragraphs)
+    c_len = len(content_text)
+
+    if p_count >= 3 or (p_count >= 2 and len(images) >= 1) or (len(images) >= 3 and p_count >= 1):
+        content_status = "full"
+        extraction_error = None
+    elif p_count >= 1 or c_len > 100:
+        content_status = "partial"
+        extraction_error = "Nội dung chỉ trích xuất được một phần bài viết hoặc phóng sự ảnh ngắn"
+    elif sapo_text:
+        content_status = "summary_only"
+        extraction_error = "Chỉ lấy được sapo hoặc tóm tắt RSS do không tìm thấy vùng thân bài chính thức"
+    else:
+        content_status = "failed"
+        extraction_error = "Không trích xuất được nội dung bài viết từ URL"
+
+    result.update({
+        "content_html": content_html,
+        "content_text": content_text,
+        "headings": headings,
+        "images": images,
+        "content_status": content_status,
+        "extraction_method": extraction_method,
+        "extraction_error": extraction_error,
+        "paragraph_count": p_count,
+        "content_length": c_len,
         "paragraphs": paragraphs,
-        "total_paragraphs": len(paragraphs)
-    }
+        "total_paragraphs": p_count
+    })
+    return result
 
 @app.route('/api/article-detail', methods=['GET', 'POST', 'OPTIONS'])
 def api_article_detail():
