@@ -2191,6 +2191,7 @@ export default function App() {
         onClose={() => setActiveArticle(null)}
         allNews={data.news}
         onSelectArticle={setActiveArticle}
+        backendUrl="http://localhost:10000"
         onOpenCopilotWithContext={(prompt) => {
           setCopilotOpen(true);
           setActiveAction("general_chat");
