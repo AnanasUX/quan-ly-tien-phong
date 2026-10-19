@@ -2492,6 +2492,24 @@ def trich_xuat_noi_dung_bai_bao(url, title="", description=""):
     }
 
     if not url or url == "#" or not url.startswith("http"):
+        if description:
+            try:
+                clean_desc = _clean_str(BeautifulSoup(description, 'html.parser').get_text()) if '<' in description else _clean_str(description)
+            except Exception:
+                clean_desc = _clean_str(description)
+            if clean_desc:
+                paras = [p.strip() for p in re.split(r'\n+|\r+', clean_desc) if len(p.strip()) > 0]
+                if not paras:
+                    paras = [clean_desc]
+                result["paragraphs"] = paras
+                result["paragraph_count"] = len(paras)
+                result["total_paragraphs"] = len(paras)
+                result["content_text"] = "\n\n".join(paras)
+                result["content_html"] = "".join(f"<p>{p}</p>" for p in paras)
+                result["content_status"] = "summary_only"
+                result["extraction_method"] = "rss_description"
+                result["extraction_error"] = None
+                return result
         result["extraction_error"] = "URL không hợp lệ hoặc rỗng"
         result["content_status"] = "failed"
         return result
@@ -2824,11 +2842,11 @@ def api_article_detail():
             data = request.get_json(silent=True) or {}
             url = data.get("url", "")
             title = data.get("title", "")
-            description = data.get("description", "")
+            description = data.get("description", "") or data.get("desc", "")
         else:
             url = request.args.get("url", "")
             title = request.args.get("title", "")
-            description = request.args.get("desc", "")
+            description = request.args.get("desc", "") or request.args.get("description", "")
             
         result = trich_xuat_noi_dung_bai_bao(url, title=title, description=description)
         response = jsonify(result)
