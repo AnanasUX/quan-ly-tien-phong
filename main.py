@@ -2398,6 +2398,9 @@ BOILERPLATE_SKIP_PHRASES = [
     'liên hệ', 'bản quyền', 'hotline', 'quảng cáo', 'tải app',
     'email:', 'đường dây nóng', 'vui lòng nhập đủ', 'link bài gốc',
     'tổng biên tập', 'giấy phép xuất bản', 'cấm sao chép', 'chia sẻ bài viết',
+    'chia sẻ', 'chi sẻ', 'chia sẻ qua', 'chi sẻ qua', 'chia sẻ lên', 'chia sẻ với', 'chia sẻ qua facebook',
+    'chia sẻ qua twitter', 'chia sẻ qua email', 'chia sẻ qua zalo',
+    'thẻ:', 'từ khóa:', 'tags:', 'tag:', 'chủ đề:',
     'xem thêm:', 'tin liên quan:', 'bài viết liên quan:', 'đọc tiếp:',
     'xem các bài viết của tác giả', 'bình luận', 'ý kiến bạn đọc', 'báo điện tử'
 ]
@@ -2653,7 +2656,9 @@ def trich_xuat_noi_dung_bai_bao(url, title="", description=""):
     for ad in soup.find_all(class_=lambda c: c and any(k in str(c).lower() for k in [
         'ads', 'banner', 'comment', 'social', 'breadcrumb', 'box-author', 'qc',
         'recommend', 'tin-lien-quan', 'relate', 'video-shorts', 'box-related',
-        'bottom-info', 'morenews', 'zone--highlight', 'sidebar'
+        'bottom-info', 'morenews', 'zone--highlight', 'sidebar',
+        'article__tag', '_tag', 'article-tag', 'detail__tag', 'box-tag', 'news-tag',
+        'topic-tag', 'keywords', 'tag-item', 'share', 'chia-se', 'chiase'
     ])):
         ad.decompose()
 
@@ -2722,7 +2727,7 @@ def trich_xuat_noi_dung_bai_bao(url, title="", description=""):
     seen_texts = set()
 
     # Đưa Sapo lên đầu nếu hợp lệ
-    if sapo_text and len(sapo_text) > 30:
+    if sapo_text and len(sapo_text) > 30 and not sapo_text.startswith('#'):
         seen_texts.add(sapo_text.lower())
         paragraphs.append(sapo_text)
         html_parts.append(f'<p class="article-sapo font-semibold">{sapo_text}</p>')
@@ -2734,21 +2739,21 @@ def trich_xuat_noi_dung_bai_bao(url, title="", description=""):
 
         if tag in ['h2', 'h3', 'h4']:
             txt = _clean_str(child.get_text())
-            if txt and len(txt) > 5 and txt.lower() not in seen_texts and not any(skip in txt.lower() for skip in BOILERPLATE_SKIP_PHRASES):
+            if txt and len(txt) > 5 and not txt.startswith('#') and txt.lower() not in seen_texts and not any(skip in txt.lower() for skip in BOILERPLATE_SKIP_PHRASES):
                 seen_texts.add(txt.lower())
                 headings.append(txt)
                 html_parts.append(f'<{tag}>{txt}</{tag}>')
 
         elif tag == 'blockquote':
             txt = _clean_str(child.get_text())
-            if txt and len(txt) > 15 and txt.lower() not in seen_texts and not any(skip in txt.lower() for skip in BOILERPLATE_SKIP_PHRASES):
+            if txt and len(txt) > 15 and not txt.startswith('#') and txt.lower() not in seen_texts and not any(skip in txt.lower() for skip in BOILERPLATE_SKIP_PHRASES):
                 seen_texts.add(txt.lower())
                 paragraphs.append(txt)
                 html_parts.append(f'<blockquote>{txt}</blockquote>')
 
         elif tag == 'p':
             txt = _clean_str(child.get_text())
-            if len(txt) > 25 and not any(skip in txt.lower() for skip in BOILERPLATE_SKIP_PHRASES):
+            if len(txt) > 20 and not txt.startswith('#') and not (txt.count('#') > 0 and len(re.sub(r'#[\w\d\s_\-]+', '', txt).strip()) < 20) and not re.search(r'(chia\s*sẻ|chi\s*sẻ|share)', txt, re.IGNORECASE) and not any(skip in txt.lower() for skip in BOILERPLATE_SKIP_PHRASES):
                 if txt.lower() not in seen_texts:
                     seen_texts.add(txt.lower())
                     paragraphs.append(txt)
