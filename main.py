@@ -401,10 +401,15 @@ def sua_loi_mojibake(text):
 
 def goi_gemini_api(cau_hoi):
     models = [
+        "gemini-3.8-flash",
+        "gemini-3.7-flash",
+        "gemini-3.6-flash",
+        "gemini-3.5-flash",
+        "gemini-3.5-flash-lite",
+        "gemini-3.1-flash-lite",
         "gemini-2.5-flash",
         "gemini-2.0-flash",
         "gemini-1.5-flash",
-        "gemini-1.5-flash-latest",
         "gemini-1.5-pro",
     ]
     headers = {
@@ -440,7 +445,7 @@ def goi_gemini_api(cau_hoi):
                 else:
                     err_msg   = res_json.get('error', {}).get('message', f'HTTP {response.status_code}')
                     last_error = err_msg
-                    if any(x in err_msg.lower() for x in ["not found", "is not found", "not supported"]):
+                    if any(x in err_msg.lower() for x in ["not found", "is not found", "not supported", "no longer available", "deprecated", "not available"]):
                         break
                     if any(x in err_msg.lower() for x in ["high demand", "temporarily", "spikes",
                                                            "overloaded", "rate", "quota"]):
@@ -459,6 +464,76 @@ def goi_gemini_api(cau_hoi):
                 break
     return False, last_error
 
+def tao_cau_tra_loi_ai_tich_hop(cau_hoi, ly_do_gemini=""):
+    """
+    Chế độ AI Thông minh tích hợp (Built-in Integrated Smart AI Fallback)
+    Phục vụ phản hồi tức thời cho người dùng khi API Gemini bên ngoài gặp sự cố,
+    hết quota hoặc đang chuyển đổi phiên bản model.
+    """
+    q = cau_hoi.lower().strip() if cau_hoi else ""
+    
+    # 1. Chào hỏi & giới thiệu
+    if any(k in q for k in ["chào", "hello", "hi", "bạn là ai", "ai đấy", "ai đây", "giới thiệu", "chức năng"]):
+        return (
+            "🤖 <b>AI Thông minh (Tích hợp):</b>\n"
+            "<i>(Đã chuyển sang chế độ AI Thông minh tích hợp)</i>\n\n"
+            "Xin chào! Tôi là Trợ lý AI Thông minh của hệ thống <b>Quản Lý Tiền Phong & Thời Tiết AnX</b>.\n\n"
+            "Tôi có thể hỗ trợ bạn:\n"
+            "• 🌤 <b>Thời tiết:</b> Tra cứu thời tiết 63 tỉnh thành, cảm giác nhiệt, mưa nắng, bão lũ.\n"
+            "• 📰 <b>Tin tức:</b> Cập nhật tin tức thời sự chính thống từ Báo Tiền Phong.\n"
+            "• 💰 <b>Tiện ích & Tính toán:</b> Tính tiền Shopee, công thức định mức, tính toán nhanh 1 dòng.\n"
+            "• 💧 <b>Chốt nước:</b> Đồng bộ lịch Google Calendar tự động hủy sau 30s.\n"
+            "• 📊 <b>Báo cáo:</b> Đồng bộ dữ liệu 2 tab Google Sheets TOAN và TIENGVIET.\n\n"
+            "Hãy đặt câu hỏi hoặc gõ các lệnh như <code>/thoitiet</code>, <code>/tintuc</code>, <code>/tinhcn</code>, <code>/shopee</code>, <code>/baocao</code> để bắt đầu!"
+        )
+
+    # 2. Hỏi về thời tiết
+    if any(k in q for k in ["thời tiết", "mưa", "nắng", "nhiệt độ", "độ ẩm", "gió", "không khí", "pm2.5"]):
+        try:
+            res_tt = lay_thoi_tiet_va_tin_tuc_hien_tai(include_news=False)
+            if res_tt and isinstance(res_tt, tuple) and res_tt[0]:
+                return (
+                    "🤖 <b>AI Thông minh (Tích hợp):</b>\n"
+                    "<i>(Đã chuyển sang chế độ AI Thông minh tích hợp)</i>\n\n"
+                    f"{res_tt[0]}"
+                )
+        except Exception:
+            pass
+        return (
+            "🤖 <b>AI Thông minh (Tích hợp):</b>\n"
+            "<i>(Đã chuyển sang chế độ AI Thông minh tích hợp)</i>\n\n"
+            "🌤 <b>Thời tiết:</b> Bạn có thể dùng lệnh <code>/thoitiet [tên tỉnh/thành]</code> hoặc <code>/thoitiethientai</code> để nhận bản tin thời tiết kèm ảnh dự báo chi tiết và radar thời gian thực."
+        )
+
+    # 3. Hỏi về tin tức
+    if any(k in q for k in ["tin tức", "bản tin", "thời sự", "báo", "tiền phong", "tin mới", "tin nóng"]):
+        return (
+            "🤖 <b>AI Thông minh (Tích hợp):</b>\n"
+            "<i>(Đã chuyển sang chế độ AI Thông minh tích hợp)</i>\n\n"
+            "📰 <b>Tin tức thời sự:</b> Bạn có thể gõ lệnh <code>/tintuc</code> để nhận ngay 5 bản tin thời sự nóng hổi nhất được tự động cập nhật từ tòa soạn Báo Tiền Phong."
+        )
+
+    # 4. Hỏi về lệnh hoặc tính toán
+    if any(k in q for k in ["tính", "công thức", "shopee", "lệnh", "hướng dẫn", "sổ nước", "báo cáo", "sheet", "menu"]):
+        return (
+            "🤖 <b>AI Thông minh (Tích hợp):</b>\n"
+            "<i>(Đã chuyển sang chế độ AI Thông minh tích hợp)</i>\n\n"
+            "💡 <b>Hướng dẫn cú pháp tiện ích hệ thống:</b>\n"
+            "• <code>/tinhcn [chuỗi]</code>: Tính nhanh 1 dòng (VD: <code>/tinhcn 100k 200k giảm 10%</code>)\n"
+            "• <code>/shopee [link] [mã]</code>: Tính giá trị đơn hàng Shopee đã trừ voucher\n"
+            "• <code>.sonuocngay [số khối] [ngày]</code>: Lên lịch nhắc chốt nước vào Google Calendar (19:00 - 19:30)\n"
+            "• <code>/baocao</code>: Đồng bộ tiến độ 2 tab Google Sheets TOAN và TIENGVIET\n"
+            "• <code>/websitecn</code>: Xem bảng cập nhật tính năng website mới nhất."
+        )
+
+    # 5. Phản hồi thông minh tổng quát
+    return (
+        "🤖 <b>AI Thông minh (Tích hợp):</b>\n"
+        "<i>(Đã chuyển sang chế độ AI Thông minh tích hợp)</i>\n\n"
+        f"Tôi đã tiếp nhận câu hỏi của bạn: <i>\"{escape_html(cau_hoi)}\"</i>.\n\n"
+        "Hệ thống đang hoạt động ở chế độ Trợ lý AI tích hợp. Bạn có thể sử dụng các lệnh chức năng của bot hoặc tiếp tục đặt câu hỏi về thời tiết, tin tức và các phân hệ tính toán của Báo Tiền Phong."
+    )
+
 def xu_ly_gemini_chat(chat_id, cau_hoi):
     wait_msg = gui_tin_nhan_telegram(chat_id, "🤖 <i>Đang trả lời...</i>", parse_mode="HTML")
     try:
@@ -468,9 +543,8 @@ def xu_ly_gemini_chat(chat_id, cau_hoi):
         if success:
             gui_tin_nhan_telegram(chat_id, f"🤖 <b>Gemini AI:</b>\n\n{escape_html(result)}", parse_mode="HTML")
         else:
-            if any(x in result.lower() for x in ["high demand", "temporarily", "spikes", "overloaded", "timeout"]):
-                result = "Model đang quá tải hoặc chậm. Vui lòng thử lại sau ít phút."
-            gui_tin_nhan_telegram(chat_id, f"⚠️ <b>Lỗi Gemini:</b> {escape_html(result)}", parse_mode="HTML")
+            tra_loi = tao_cau_tra_loi_ai_tich_hop(cau_hoi, result)
+            gui_tin_nhan_telegram(chat_id, tra_loi, parse_mode="HTML")
     except Exception as e:
         for mid in wait_msg:
             xoa_tin_nhan(chat_id, mid)
@@ -2901,7 +2975,7 @@ def api_tts_voices():
 
 @app.route('/')
 def home():
-    return "Hệ thống AnX v7.1 (Token mới 09/2026 – Gemini 2.5 Flash – /tinhcn + /websitecn) đang hoạt động!"
+    return "Hệ thống AnX v7.1 (Token mới 09/2026 – Gemini 3.8 Flash – /tinhcn + /websitecn) đang hoạt động!"
 
 def run_telegram_polling():
     """Long Polling – dùng khi không có webhook."""
