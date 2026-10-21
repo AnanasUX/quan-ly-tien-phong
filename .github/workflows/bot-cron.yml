@@ -18,11 +18,15 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-      - name: Run Hourly Push Job (News & Weather)
+      - name: Run Hourly Push Job (News & Weather & Calendar Cleanup)
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           OPENWEATHER_API_KEY: ${{ secrets.OPENWEATHER_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           AUTHORIZED_USERNAME: ${{ secrets.AUTHORIZED_USERNAME }}
+          TELEGRAM_AUTO_NEWS_CHATS: ${{ secrets.TELEGRAM_AUTO_NEWS_CHATS || secrets.TELEGRAM_CHAT_ID || secrets.ADMIN_CHAT_ID || secrets.CHAT_ID }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          ADMIN_CHAT_ID: ${{ secrets.ADMIN_CHAT_ID }}
+          CHAT_ID: ${{ secrets.CHAT_ID }}
         run: |
-          python -c "import main; main.job_tu_dong_day_tin(); main.job_thoi_tiet_hang_gio()"
+          python -c "import main; main.tu_dong_khoi_phuc_chat_id(); main.job_tu_dong_day_tin(); main.job_thoi_tiet_hang_gio(); main.xoa_lich_dien_nuoc_qua_han()"

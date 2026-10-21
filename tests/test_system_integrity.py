@@ -217,5 +217,58 @@ class TestFlaskAPIEndpoints(unittest.TestCase):
         self.assertTrue(data["audio"].startswith("data:audio/wav;base64,"))
 
 
+    def test_calendar_cleanup_endpoint(self):
+        res = self.client.get('/api/calendar/cleanup-expired')
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.headers.get('Access-Control-Allow-Origin'), '*')
+        data = json.loads(res.get_data(as_text=True))
+        self.assertEqual(data.get('status'), 'ok')
+        self.assertIn('deleted_count', data)
+
+    def test_auto_discovery_and_calendar_cleanup_functions(self):
+        from main import tu_dong_khoi_phuc_chat_id, xoa_lich_dien_nuoc_qua_han
+        chats = tu_dong_khoi_phuc_chat_id()
+        self.assertIsInstance(chats, (set, list))
+
+        class MockEvents:
+            def __init__(self):
+                self.deleted = []
+            def list(self, **kwargs):
+                self.list_kwargs = kwargs
+                return self
+            def execute(self):
+                return {
+                    'items': [
+                        {
+                            'id': 'mock_past_water_event',
+                            'summary': '💧 Lịch chốt số nước',
+                            'description': 'Hệ thống AnX nhắc nhở chốt nước.\n- Tiêu thụ thực tế: 2.0 khối/ngày',
+                            'creator': {'email': 'bot-calendar@bot-lich-nuoc.iam.gserviceaccount.com'}
+                        },
+                        {
+                            'id': 'mock_personal_meeting',
+                            'summary': 'Họp công việc cá nhân',
+                            'description': 'Thảo luận dự án',
+                            'creator': {'email': 'personal@gmail.com'}
+                        }
+                    ]
+                }
+            def delete(self, calendarId, eventId):
+                self.deleted.append(eventId)
+                return self
+
+        class MockService:
+            def __init__(self):
+                self._events = MockEvents()
+            def events(self):
+                return self._events
+
+        mock_svc = MockService()
+        count, deleted_titles = xoa_lich_dien_nuoc_qua_han(service=mock_svc)
+        self.assertEqual(count, 1)
+        self.assertIn('mock_past_water_event', mock_svc.events().deleted)
+        self.assertNotIn('mock_personal_meeting', mock_svc.events().deleted)
+
+
 if __name__ == '__main__':
     unittest.main()

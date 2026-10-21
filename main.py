@@ -185,6 +185,50 @@ def load_data():
                 if c_clean:
                     active_auto_news_chats.add(c_clean)
 
+def tu_dong_khoi_phuc_chat_id():
+    """
+    Tự động phục hồi danh sách chat_id nhận tin thời tiết và tin tức định kỳ.
+    Ưu tiên:
+      1. Biến môi trường: TELEGRAM_AUTO_NEWS_CHATS, TELEGRAM_CHAT_ID, ADMIN_CHAT_ID, CHAT_ID.
+      2. Nếu rỗng (môi trường ephemeral như GitHub Actions), tự quét getUpdates Telegram API
+         để tìm chat_id của Quản trị viên (AUTHORIZED_USERNAME).
+    """
+    global active_auto_news_chats
+    env_chats = (os.environ.get("TELEGRAM_AUTO_NEWS_CHATS") or
+                 os.environ.get("TELEGRAM_CHAT_ID") or
+                 os.environ.get("ADMIN_CHAT_ID") or
+                 os.environ.get("CHAT_ID"))
+    if env_chats:
+        for cid in str(env_chats).split(","):
+            c_clean = cid.strip()
+            if c_clean and c_clean.lstrip("-").isdigit():
+                active_auto_news_chats.add(c_clean)
+
+    valid_chats = {c for c in active_auto_news_chats if str(c) not in ["12345678", "mock_chat_id"]}
+    if not valid_chats and TELEGRAM_BOT_TOKEN and "mock" not in TELEGRAM_BOT_TOKEN:
+        try:
+            res = requests.get(
+                f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates",
+                params={"limit": 50}, timeout=10
+            )
+            if res.status_code == 200:
+                data = res.json()
+                if data.get("ok"):
+                    for u in data.get("result", []):
+                        msg = u.get("message") or u.get("channel_post") or u.get("callback_query", {}).get("message")
+                        if msg and "chat" in msg:
+                            c_id = str(msg["chat"]["id"])
+                            from_user = (u.get("message", {}).get("from", {}).get("username") or "").lower()
+                            if from_user == AUTHORIZED_USERNAME.lower() or not valid_chats:
+                                active_auto_news_chats.add(c_id)
+                                valid_chats.add(c_id)
+                                print(f"[Auto-Discovery] Đã tự động nhận diện chat_id: {c_id}")
+        except Exception as e:
+            print(f"[Auto-Discovery Error] Lỗi kiểm tra getUpdates: {e}")
+
+    save_data()
+    return active_auto_news_chats
+
 def save_data():
     with json_lock:
         try:
@@ -551,8 +595,68 @@ def xu_ly_gemini_chat(chat_id, cau_hoi):
         gui_tin_nhan_telegram(chat_id, f"⚠️ <b>Lỗi hệ thống:</b> {escape_html(str(e))}", parse_mode="HTML")
 
 # =====================================================================
-# [PHẦN 4.5] GOOGLE CALENDAR (LỊCH CHỐT NƯỚC)
+# [PHẦN 4.5] GOOGLE CALENDAR (LỊCH CHỐT NƯỚC & TỰ ĐỘNG DỌN DẸP LỊCH QUÁ HẠN)
 # =====================================================================
+def xoa_lich_dien_nuoc_qua_han(service=None):
+    """
+    Tự động quét và xóa các sự kiện lịch gán số điện nước trong quá khứ trên Google Calendar (mrkun28@gmail.com).
+    Chỉ xóa các sự kiện do Bot/Service Account tạo hoặc có tiêu đề/mô tả thuộc hệ thống chốt số điện nước AnX,
+    tuyệt đối không đụng đến các lịch hẹn, cuộc họp cá nhân khác của người dùng.
+    """
+    if not GOOGLE_API_AVAILABLE or not os.path.exists('credentials.json'):
+        return 0, []
+    try:
+        if service is None:
+            creds = Credentials.from_service_account_file('credentials.json', scopes=GOOGLE_SCOPES)
+            service = build('calendar', 'v3', credentials=creds)
+            
+        now_dt = datetime.datetime.now(datetime.timezone.utc)
+        now_iso = now_dt.isoformat()
+        
+        # Lấy tối đa 250 sự kiện kết thúc trước thời điểm hiện tại
+        res = service.events().list(
+            calendarId=CALENDAR_ID,
+            timeMax=now_iso,
+            singleEvents=True,
+            maxResults=250
+        ).execute()
+        
+        items = res.get('items', [])
+        deleted_items = []
+        
+        for it in items:
+            creator_email = str(it.get('creator', {}).get('email', '')).lower()
+            organizer_email = str(it.get('organizer', {}).get('email', '')).lower()
+            summary = str(it.get('summary', '')).lower()
+            desc = str(it.get('description', '')).lower()
+            
+            # Tiêu chí an toàn 100%: Phải là sự kiện liên quan đến gán/nhắc nhở chốt số điện nước
+            is_bot_account = ("bot-calendar" in creator_email or 
+                              "gserviceaccount.com" in creator_email or 
+                              "gserviceaccount.com" in organizer_email)
+            is_meter_keyword = any(kw in summary for kw in [
+                "lịch chốt số nước", "lịch chốt số điện", "ngày khoá nước (chốt số)",
+                "ngày khóa nước (chốt số)", "chốt số nước", "chốt số điện",
+                "chốt nước", "chốt điện", "lịch chốt nước", "lịch chốt điện"
+            ])
+            is_system_meter_desc = any(kw in desc for kw in [
+                "hệ thống anx nhắc nhở chốt", "tiêu thụ thực tế", "khối/ngày", "kwh/ngày", "chốt số nước thực tế"
+            ])
+            
+            # Chỉ xóa nếu thỏa mãn đúng sự kiện điện nước hệ thống AnX đã quá hạn
+            if (is_meter_keyword or is_system_meter_desc) and (is_bot_account or is_system_meter_desc or "lịch chốt số" in summary or "khoá nước" in summary or "khóa nước" in summary):
+                try:
+                    service.events().delete(calendarId=CALENDAR_ID, eventId=it['id']).execute()
+                    deleted_items.append(it.get('summary', it['id']))
+                    print(f"[Calendar Cleanup] Đã tự động xóa sự kiện quá hạn: {it.get('summary')} ({it['id']})")
+                except Exception as del_err:
+                    print(f"[Calendar Cleanup Error] Không thể xóa {it['id']}: {del_err}")
+                    
+        return len(deleted_items), deleted_items
+    except Exception as e:
+        print(f"[Calendar Cleanup Error] Lỗi kiểm tra lịch quá hạn: {e}")
+        return 0, []
+
 def them_lich_chot_nuoc(ngay_chot, so_khoi, so_ngay):
     if not GOOGLE_API_AVAILABLE or not os.path.exists('credentials.json'):
         return False, "Không tìm thấy file credentials.json"
@@ -560,7 +664,13 @@ def them_lich_chot_nuoc(ngay_chot, so_khoi, so_ngay):
         creds = Credentials.from_service_account_file('credentials.json', scopes=GOOGLE_SCOPES)
         service = build('calendar', 'v3', credentials=creds)
         
-        # 1. Search and delete existing events with the same title
+        # 1. Tự động dọn dẹp các sự kiện chốt số quá hạn trước
+        try:
+            xoa_lich_dien_nuoc_qua_han(service=service)
+        except Exception:
+            pass
+
+        # 2. Xóa các sự kiện chốt nước trùng trong tương lai (tránh nhân bản lịch)
         try:
             now = datetime.datetime.utcnow().isoformat() + 'Z'
             events_result = service.events().list(
@@ -575,7 +685,7 @@ def them_lich_chot_nuoc(ngay_chot, so_khoi, so_ngay):
                     except: pass
         except: pass
         
-        # 2. Insert new event at 19:00 (7:00 PM)
+        # 3. Insert new event at 19:00 (7:00 PM)
         event = {
             'summary': '💧 Lịch chốt số nước',
             'description': f'Hệ thống AnX nhắc nhở chốt nước.\n- Tiêu thụ thực tế: {so_khoi} khối/ngày\n- Số ngày dùng: {so_ngay} ngày.',
@@ -1268,9 +1378,12 @@ def tim_toa_do_theo_ten(ten_dia_diem):
     return {"thanh_cong": False}
 
 def lay_tat_ca_bai_viet_ngau_nhien(sort_by_date=True, chi_lay_hom_nay=True):
-    danh_sach_tong  = []
-    headers         = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
-    nguon_rss       = [val for val in DANH_SACH_TRANG.values()]
+    import concurrent.futures
+    import email.utils
+    import urllib.parse
+
+    headers   = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+    nguon_rss = [val for val in DANH_SACH_TRANG.values()]
 
     if TRANG_THAI_THOI_TIET == "MUA_CA_NGAY":
         nguon_rss.append({"ten": "⚠️ CẢNH BÁO MƯA LŨ",
@@ -1285,75 +1398,85 @@ def lay_tat_ca_bai_viet_ngau_nhien(sort_by_date=True, chi_lay_hom_nay=True):
     now_ts = now_dt.timestamp()
     min_ts = now_ts - (36 * 3600)
 
+    url_pairs = []
     for t_info in nguon_rss:
         for url in t_info["muc"]:
-            try:
-                res = requests.get(url, headers=headers, timeout=8)
-                res.encoding = 'utf-8'
-                if res.status_code != 200:
+            url_pairs.append((t_info, url))
+
+    def fetch_rss_feed(pair):
+        t_info, url = pair
+        articles = []
+        try:
+            res = requests.get(url, headers=headers, timeout=6)
+            res.encoding = 'utf-8'
+            if res.status_code != 200:
+                return articles
+            try:    soup = BeautifulSoup(res.text, 'xml')
+            except: soup = BeautifulSoup(res.text, 'html.parser')
+            for item in soup.find_all('item')[:15]:
+                raw_title = item.title.text.strip() if item.title else "News"
+                title     = html.unescape(raw_title)
+                if " - " in title:
+                    title = " - ".join(title.split(" - ")[:-1])
+                raw_desc  = item.description.text.strip() if item.description else ""
+                desc      = html.unescape(raw_desc)
+                link      = item.link.text.strip() if item.link else ""
+                ts        = now_ts
+                pub_str   = ""
+                is_too_old = False
+                if item.pubDate and item.pubDate.text:
+                    try:
+                        p_dt = email.utils.parsedate_to_datetime(item.pubDate.text)
+                        ts = p_dt.timestamp()
+                        pub_str = item.pubDate.text.strip()
+                        if p_dt.year < now_dt.year:
+                            is_too_old = True
+                        elif chi_lay_hom_nay and ts < min_ts:
+                            is_too_old = True
+                    except Exception:
+                        ts = now_ts
+
+                if is_too_old:
                     continue
-                try:    soup = BeautifulSoup(res.text, 'xml')
-                except: soup = BeautifulSoup(res.text, 'html.parser')
-                for item in soup.find_all('item')[:15]:
-                    raw_title = item.title.text.strip() if item.title else "News"
-                    title     = html.unescape(raw_title)
-                    # Xử lý cắt bỏ phần "- Tên Báo" do Google News tự động nối thêm vào cuối title
-                    if " - " in title:
-                        title = " - ".join(title.split(" - ")[:-1])
-                    raw_desc  = item.description.text.strip() if item.description else ""
-                    desc      = html.unescape(raw_desc)
-                    link      = item.link.text.strip() if item.link else ""
-                    import email.utils
-                    ts = now_ts
-                    pub_str = ""
-                    is_too_old = False
-                    if item.pubDate and item.pubDate.text:
-                        try:
-                            p_dt = email.utils.parsedate_to_datetime(item.pubDate.text)
-                            ts = p_dt.timestamp()
-                            pub_str = item.pubDate.text.strip()
-                            if p_dt.year < now_dt.year:
-                                is_too_old = True
-                            elif chi_lay_hom_nay and ts < min_ts:
-                                is_too_old = True
-                        except Exception:
-                            ts = now_ts
 
-                    if is_too_old:
-                        continue
+                if not pub_str:
+                    pub_str = datetime.datetime.fromtimestamp(ts, tz=datetime.timezone(datetime.timedelta(hours=7))).strftime('%a, %d %b %Y %H:%M:%S +0700')
 
-                    if not pub_str:
-                        pub_str = datetime.datetime.fromtimestamp(ts, tz=datetime.timezone(datetime.timedelta(hours=7))).strftime('%a, %d %b %Y %H:%M:%S +0700')
+                img_url   = None
+                enc       = item.find('enclosure')
+                if enc and 'url' in enc.attrs:
+                    img_url = enc['url']
+                else:
+                    try:
+                        img_tag = BeautifulSoup(desc, 'html.parser').find('img')
+                        if img_tag and 'src' in img_tag.attrs:
+                            img_url = img_tag['src']
+                    except:
+                        pass
+                if img_url and img_url.startswith("http") and "wsrv.nl" not in img_url:
+                    img_url = f"https://wsrv.nl/?url={urllib.parse.quote(img_url)}"
+                try:    c_desc = BeautifulSoup(desc, 'html.parser').get_text().strip()
+                except: c_desc = desc
+                c_desc = html.unescape(c_desc)
+                if len(c_desc) > 240:
+                    c_desc = c_desc[:240] + "..."
+                if link:
+                    articles.append({
+                        "title": title, "description": c_desc,
+                        "link": link,   "image": img_url,
+                        "author": t_info["ten"], "source": t_info["ten"],
+                        "pubDate": pub_str,
+                        "timestamp": ts
+                    })
+        except Exception:
+            pass
+        return articles
 
-                    img_url   = None
-                    enc       = item.find('enclosure')
-                    if enc and 'url' in enc.attrs:
-                        img_url = enc['url']
-                    else:
-                        try:
-                            img_tag = BeautifulSoup(desc, 'html.parser').find('img')
-                            if img_tag and 'src' in img_tag.attrs:
-                                img_url = img_tag['src']
-                        except:
-                            pass
-                    import urllib.parse
-                    if img_url and img_url.startswith("http") and "wsrv.nl" not in img_url:
-                        img_url = f"https://wsrv.nl/?url={urllib.parse.quote(img_url)}"
-                    try:    c_desc = BeautifulSoup(desc, 'html.parser').get_text().strip()
-                    except: c_desc = desc
-                    c_desc = html.unescape(c_desc)
-                    if len(c_desc) > 240:
-                        c_desc = c_desc[:240] + "..."
-                    if link:
-                        danh_sach_tong.append({
-                            "title": title, "description": c_desc,
-                            "link": link,   "image": img_url,
-                            "author": t_info["ten"], "source": t_info["ten"],
-                            "pubDate": pub_str,
-                            "timestamp": ts
-                        })
-            except:
-                continue
+    danh_sach_tong = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+        results = executor.map(fetch_rss_feed, url_pairs)
+        for res_list in results:
+            danh_sach_tong.extend(res_list)
 
     seen_links = set()
     unique_danh_sach = []
@@ -1430,15 +1553,24 @@ def job_cap_nhat_docs_tin_tuc():
 
 def job_tu_dong_day_tin():
     try:
-        ht_time     = time.time()
-        with json_lock: chats_to_send = list(active_auto_news_chats)
+        ht_time = time.time()
+        tu_dong_khoi_phuc_chat_id()
+        with json_lock:
+            # Lọc bỏ các chat_id giả lập trong unit test nếu đã có chat thực tế
+            all_chats = [c for c in active_auto_news_chats if str(c) not in ["12345678", "mock_chat_id"]]
+            if not all_chats:
+                all_chats = list(active_auto_news_chats)
+            chats_to_send = all_chats
+
         valid_chats = [c for c in chats_to_send
                        if ht_time - user_last_news_sent.get(str(c), 0) >= 1800]
         if not valid_chats:
+            print("[News Scheduler] Không có chat_id nào cần đẩy tin hoặc chưa qua 30 phút.")
             return
 
         tat_ca_tin = lay_tat_ca_bai_viet_ngau_nhien(sort_by_date=True, chi_lay_hom_nay=True)
         if not tat_ca_tin:
+            print("[News Scheduler] Không thu thập được tin tức mới.")
             return
 
         sent_to_any = False
@@ -1472,18 +1604,32 @@ def job_tu_dong_day_tin():
                     gui_tin_nhan_telegram(chat_id, caption, parse_mode="HTML", disable_noti=True)
             user_last_news_sent[chat_str] = time.time()
             sent_to_any = True
+            print(f"[News Scheduler] Đã đẩy tin tức thành công tới chat: {chat_id}")
         if sent_to_any:
             save_data()
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[News Scheduler Error] Lỗi đẩy tin tức tự động: {e}")
 
 def job_thoi_tiet_hang_gio():
     try:
         ht   = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=7)))
         hour = ht.hour
         cap_nhat_trang_thai_thoi_tiet()
-        with json_lock: chats = list(active_auto_news_chats)
+        tu_dong_khoi_phuc_chat_id()
 
+        # Luôn tự động quét dọn dẹp các lịch chốt điện nước quá hạn trên Google Calendar mỗi giờ
+        try:
+            xoa_lich_dien_nuoc_qua_han()
+        except Exception:
+            pass
+
+        with json_lock:
+            all_chats = [c for c in active_auto_news_chats if str(c) not in ["12345678", "mock_chat_id"]]
+            if not all_chats:
+                all_chats = list(active_auto_news_chats)
+            chats = all_chats
+
+        print(f"[Weather Scheduler] Bắt đầu gửi thời tiết hàng giờ ({hour}h). Số chat nhận: {len(chats)}")
         for chat_id in chats:
             chat_str = str(chat_id)
             if hour == 0:
@@ -1496,10 +1642,10 @@ def job_thoi_tiet_hang_gio():
             if old_pin:
                 try:
                     requests.post(f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/unpinChatMessage",
-                                  json={"chat_id": chat_id, "message_id": old_pin}, timeout=5)
+                                  json={"chat_id": chat_id, "message_id": old_pin}, timeout=10)
                     requests.post(f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/deleteMessage",
-                                  json={"chat_id": chat_id, "message_id": old_pin}, timeout=5)
-                except:
+                                  json={"chat_id": chat_id, "message_id": old_pin}, timeout=10)
+                except Exception:
                     pass
 
             try:
@@ -1507,22 +1653,28 @@ def job_thoi_tiet_hang_gio():
                     f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
                     json={"chat_id": chat_id, "text": noi_dung, "parse_mode": "HTML",
                           "disable_web_page_preview": True, "disable_notification": True},
-                    timeout=5
+                    timeout=15
                 )
                 if res.status_code == 200:
                     new_msg_id = res.json()['result']['message_id']
-                    requests.post(f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/pinChatMessage",
-                                  json={"chat_id": chat_id, "message_id": new_msg_id,
-                                        "disable_notification": True}, timeout=5)
+                    try:
+                        requests.post(f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/pinChatMessage",
+                                      json={"chat_id": chat_id, "message_id": new_msg_id,
+                                            "disable_notification": True}, timeout=10)
+                    except Exception:
+                        pass
                     pinned_weather_msgs[chat_str] = new_msg_id
-            except:
-                pass
+                    print(f"[Weather Scheduler] Gửi thành công tới chat: {chat_id} (msg: {new_msg_id})")
+                else:
+                    print(f"[Weather Scheduler Error] Mã phản hồi Telegram {res.status_code}: {res.text}")
+            except Exception as e:
+                print(f"[Weather Scheduler Error] Lỗi gửi sendMessage chat {chat_id}: {e}")
 
             if img_url:
                 gui_anh_telegram(chat_id, img_url, img_caption)
         save_data()
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[Weather Scheduler Error] Lỗi tổng thể job thời tiết: {e}")
 
 try:
     scheduler = BackgroundScheduler(timezone="Asia/Ho_Chi_Minh")
@@ -1531,6 +1683,7 @@ except Exception:
 scheduler.add_job(func=job_tu_dong_day_tin,    trigger="cron", minute=30)
 scheduler.add_job(func=job_thoi_tiet_hang_gio, trigger="cron", minute=0)
 scheduler.add_job(func=job_cap_nhat_docs_tin_tuc, trigger="cron", hour=0, minute=1)
+scheduler.add_job(func=xoa_lich_dien_nuoc_qua_han, trigger="cron", minute=15)
 scheduler.start()
 
 # =====================================================================
@@ -1654,6 +1807,17 @@ def xu_ly_telegram_update(data):
         cmd = text.split('@')[0].strip() if text else ""
 
         # ── Gemini AI ──
+                # ── Dọn dẹp lịch gán số điện nước quá hạn ──
+        if cmd in [".xoalichquahan", "/cleanpastcalendar", ".donlich", "menu_donlich"]:
+            def xu_ly_don_lich():
+                count, items = xoa_lich_dien_nuoc_qua_han()
+                if count > 0:
+                    gui_tin_nhan_telegram(chat_id, f"✅ <b>Đã dọn dẹp {count} lịch điện nước quá hạn trên Google Calendar!</b>\n- Chi tiết: {', '.join(items[:5])}", parse_mode="HTML")
+                else:
+                    gui_tin_nhan_telegram(chat_id, "ℹ️ <b>Không có lịch điện nước quá hạn nào cần xóa trên Google Calendar.</b>", parse_mode="HTML")
+            threading.Thread(target=xu_ly_don_lich, daemon=True).start()
+            return
+
         if cmd.startswith("/startgemini") or cmd.startswith("/geminichat") or cmd == "menu_startgemini":
             cau_hoi = (text.replace("/startgemini", "").replace("/geminichat", "")
                            .replace(f"@{AUTHORIZED_USERNAME}", "").strip() if text else "")
@@ -2972,6 +3136,16 @@ def api_tts_voices():
         return response
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/calendar/cleanup-expired', methods=['GET', 'POST'])
+def api_calendar_cleanup_expired():
+    count, items = xoa_lich_dien_nuoc_qua_han()
+    return jsonify({
+        "status": "ok",
+        "deleted_count": count,
+        "deleted_items": items,
+        "message": f"Đã quét và xóa {count} sự kiện lịch điện nước quá hạn."
+    })
 
 @app.route('/')
 def home():
