@@ -54,6 +54,67 @@ const DEFAULT_LON = 105.7725;
 const DEFAULT_LOCATION = "Hà Nội";
 const BACKEND_URL = "https://quan-ly-tien-phong-main.onrender.com";
 
+// ── Geolocation Hook ──────────────────────────────────────────────────────
+type GeoState = { status: "idle" | "loading" | "granted" | "denied"; lat: number; lon: number; name: string };
+
+function useGeoLocation(): [GeoState, () => void] {
+  const [geo, setGeo] = useState<GeoState>(() => {
+    try {
+      const saved = localStorage.getItem("pulse_location");
+      if (saved) {
+        const p = JSON.parse(saved);
+        if (p.lat && p.lon && p.name) return { status: "granted", lat: p.lat, lon: p.lon, name: p.name };
+      }
+    } catch {}
+    return { status: "idle", lat: DEFAULT_LAT, lon: DEFAULT_LON, name: DEFAULT_LOCATION };
+  });
+
+  const request = useCallback(() => {
+    if (!navigator.geolocation) {
+      setGeo(g => ({ ...g, status: "denied" }));
+      return;
+    }
+    setGeo(g => ({ ...g, status: "loading" }));
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const lat = Math.round(pos.coords.latitude * 10000) / 10000;
+        const lon = Math.round(pos.coords.longitude * 10000) / 10000;
+        let name = DEFAULT_LOCATION;
+        try {
+          const r = await fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${OWM_KEY}&lang=vi`);
+          if (r.ok) { const d = await r.json(); name = d.name || DEFAULT_LOCATION; }
+        } catch {}
+        const newGeo = { status: "granted" as const, lat, lon, name };
+        setGeo(newGeo);
+        localStorage.setItem("pulse_location", JSON.stringify({ lat, lon, name }));
+      },
+      () => { setGeo(g => ({ ...g, status: "denied" })); },
+      { timeout: 8000, maximumAge: 5 * 60 * 1000 }
+    );
+  }, []);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("pulse_location");
+    if (!saved) request();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return [geo, request];
+}
+
+// ── Manual location change (city name search) ─────────────────────────────
+async function geocodeCity(cityName: string): Promise<{ lat: number; lon: number; name: string } | null> {
+  try {
+    const r = await fetch(`https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(cityName)}&limit=1&appid=${OWM_KEY}`);
+    if (r.ok) {
+      const d = await r.json();
+      if (d && d.length > 0) return { lat: d[0].lat, lon: d[0].lon, name: d[0].local_names?.vi || d[0].name };
+    }
+  } catch {}
+  return null;
+}
+
+
+
 // ── Weather Types ─────────────────────────────────────────────────────────
 
 type ConditionKey = "binh-thuong" | "nang" | "nang-gat" | "am-u" | "mua-nho" | "mua-dong";
@@ -177,6 +238,7 @@ interface LiveWeather {
   feelsLike: number;
   humidity: number;
   windSpeed: number;
+  visibility: number;
   description: string;
   icon: string;
   pm25: number;
@@ -186,6 +248,9 @@ interface LiveWeather {
 
 interface ForecastItem {
   time: string;
+  date?: string;
+  tempMin?: number;
+  tempMax?: number;
   temp: number;
   pop: number;
   icon: string;
@@ -332,13 +397,13 @@ export const FALLBACK_VIDEOS: VideoItem[] = [
   },
 ];
 
-// ── Fetch weather directly from OpenWeatherMap ────────────────────────────
+// ── Fetch weather directly from OpenWeatherMap (dynamic lat/lon) ─────────
 
-async function fetchWeatherDirect(): Promise<{ weather: LiveWeather; forecast: ForecastItem[] }> {
+async function fetchWeatherDirect(lat: number, lon: number): Promise<{ weather: LiveWeather; forecast: ForecastItem[] }> {
   const [currRes, foreRes, aqiRes] = await Promise.all([
-    fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${DEFAULT_LAT}&lon=${DEFAULT_LON}&appid=${OWM_KEY}&units=metric&lang=vi`),
-    fetch(`https://api.openweathermap.org/data/2.5/forecast?lat=${DEFAULT_LAT}&lon=${DEFAULT_LON}&appid=${OWM_KEY}&units=metric&lang=vi`),
-    fetch(`https://api.openweathermap.org/data/2.5/air_pollution?lat=${DEFAULT_LAT}&lon=${DEFAULT_LON}&appid=${OWM_KEY}`),
+    fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${OWM_KEY}&units=metric&lang=vi`),
+    fetch(`https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${OWM_KEY}&units=metric&lang=vi`),
+    fetch(`https://api.openweathermap.org/data/2.5/air_pollution?lat=${lat}&lon=${lon}&appid=${OWM_KEY}`),
   ]);
 
   const curr = await currRes.json();
@@ -349,7 +414,8 @@ async function fetchWeatherDirect(): Promise<{ weather: LiveWeather; forecast: F
   const temp = Math.round(curr.main.temp * 10) / 10;
   const feelsLike = Math.round(curr.main.feels_like * 10) / 10;
   const humidity = curr.main.humidity;
-  const windSpeed = Math.round((curr.wind?.speed || 0) * 3.6); // m/s -> km/h
+  const windSpeed = Math.round((curr.wind?.speed || 0) * 3.6); // m/s → km/h
+  const visibility = Math.round((curr.visibility || 10000) / 1000); // m → km
   const pm25 = aqi.list?.[0]?.components?.pm2_5 || 0;
   const aqiLevel = aqi.list?.[0]?.main?.aqi || 1;
 
@@ -366,25 +432,54 @@ async function fetchWeatherDirect(): Promise<{ weather: LiveWeather; forecast: F
   };
 
   const weather: LiveWeather = {
-    temp, feelsLike, humidity, windSpeed, description: desc,
+    temp, feelsLike, humidity, windSpeed, visibility,
+    description: desc,
     icon: iconMap[curr.weather?.[0]?.icon] || "🌤️",
     pm25: Math.round(pm25 * 100) / 100,
     aqiLevel, condKey,
   };
 
-  const forecast: ForecastItem[] = forecastList.map((item: any) => {
-    const dt = new Date(item.dt * 1000);
-    return {
-      time: dt.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
-      temp: Math.round(item.main.temp),
-      pop: Math.round((item.pop || 0) * 100),
-      icon: iconMap[item.weather?.[0]?.icon] || "🌤️",
-      desc: item.weather?.[0]?.description || "",
-    };
+  // ── 5-day daily forecast (group by day) ──────────────────────────────────
+  const allSlots = (fore.list || []) as any[];
+  const dayMap = new Map<string, { temps: number[]; pops: number[]; icons: string[]; descs: string[] }>();
+  const today = new Date().toLocaleDateString("vi-VN", { weekday: "short" });
+  allSlots.forEach((slot: any) => {
+    const dt = new Date(slot.dt * 1000);
+    const dayKey = dt.toLocaleDateString("vi-VN", { weekday: "short", day: "2-digit", month: "2-digit" });
+    if (!dayMap.has(dayKey)) dayMap.set(dayKey, { temps: [], pops: [], icons: [], descs: [] });
+    const d = dayMap.get(dayKey)!;
+    d.temps.push(slot.main.temp);
+    d.pops.push(slot.pop || 0);
+    d.icons.push(iconMap[slot.weather?.[0]?.icon] || "🌤️");
+    d.descs.push(slot.weather?.[0]?.description || "");
   });
+
+  const forecast: ForecastItem[] = Array.from(dayMap.entries())
+    .slice(0, 5)
+    .map(([dayKey, d]) => {
+      const maxPop = Math.round(Math.max(...d.pops) * 100);
+      const avgTemp = Math.round(d.temps.reduce((a, b) => a + b, 0) / d.temps.length);
+      const minTemp = Math.round(Math.min(...d.temps));
+      const maxTemp = Math.round(Math.max(...d.temps));
+      // Pick most common icon
+      const iconCount = d.icons.reduce((acc: Record<string, number>, ic) => { acc[ic] = (acc[ic] || 0) + 1; return acc; }, {});
+      const bestIcon = Object.entries(iconCount).sort((a, b) => b[1] - a[1])[0]?.[0] || "🌤️";
+      const isToday = dayKey.startsWith(today);
+      return {
+        time: isToday ? "Hôm nay" : dayKey.split(",")[0] || dayKey,
+        date: dayKey,
+        temp: avgTemp,
+        tempMin: minTemp,
+        tempMax: maxTemp,
+        pop: maxPop,
+        icon: bestIcon,
+        desc: d.descs[Math.floor(d.descs.length / 2)] || "",
+      };
+    });
 
   return { weather, forecast };
 }
+
 
 // ── Fetch news from backend or fallback (Chỉ lấy bài viết mới nhất trong ngày hôm nay) ──
 
@@ -1102,74 +1197,194 @@ export function AntigravityCopilotModal({ isOpen, onClose, data, initialAction }
 
 // ── Weather Section (Left Column) ─────────────────────────────────────────
 
+function LiveClock({ location }: { location: string }) {
+  const [time, setTime] = useState(() => new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }));
+  useEffect(() => {
+    const id = setInterval(() => setTime(new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })), 30000);
+    return () => clearInterval(id);
+  }, []);
+  return <span>{time}</span>;
+}
+
 export function WeatherColumn({
   data,
   onOpenCopilot,
+  geoStatus,
+  onRequestGeo,
+  onRefresh,
+  isRefreshing,
 }: {
   data: AppData;
   onOpenCopilot: (action: string | null) => void;
+  geoStatus?: "idle" | "loading" | "granted" | "denied";
+  onRequestGeo?: () => void;
+  onRefresh?: () => void;
+  isRefreshing?: boolean;
 }) {
   const theme = WEATHER_THEMES[data.weather.condKey];
-  const pm25Icon = data.weather.aqiLevel >= 4 ? "😷" : data.weather.aqiLevel >= 3 ? "⚠️" : "✅";
+  const pm25 = data.weather.pm25;
+  const pm25Icon = data.weather.aqiLevel >= 4 ? "🚫" : data.weather.aqiLevel >= 3 ? "⚠️" : "✅";
+  const pm25Label = pm25 <= 12 ? "Tốt" : pm25 <= 35.4 ? "Trung bình" : pm25 <= 55.4 ? "Kém" : "Nguy hại";
+  const isStorm = data.weather.condKey === "mua-dong";
+  const isBadAir = data.weather.aqiLevel >= 4;
+  const [alertDismissed, setAlertDismissed] = useState(false);
+  const [locationInput, setLocationInput] = useState("");
+  const [showLocInput, setShowLocInput] = useState(false);
+
+  const handleLocKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" && locationInput.trim()) {
+      const result = await geocodeCity(locationInput.trim());
+      if (result) {
+        localStorage.setItem("pulse_location", JSON.stringify(result));
+        window.location.reload();
+      }
+      setShowLocInput(false);
+      setLocationInput("");
+    }
+    if (e.key === "Escape") { setShowLocInput(false); setLocationInput(""); }
+  };
 
   return (
     <div className="flex flex-col gap-4 w-full">
-      {/* Hero Card */}
+
+      {/* ── Alert Banner (Storm / Bad Air) ─────────────────────────────── */}
+      {(isStorm || isBadAir) && !alertDismissed && (
+        <div className={`flex items-start gap-3 p-3.5 rounded-2xl border animate-in slide-in-from-top duration-300 ${
+          isStorm
+            ? "bg-rose-50 border-rose-200 text-rose-800"
+            : "bg-amber-50 border-amber-200 text-amber-800"
+        }`}>
+          <span className="text-[22px] shrink-0 mt-0.5">{isStorm ? "⛈️" : "😷"}</span>
+          <div className="flex-1 min-w-0">
+            <p className="font-bold text-[13px]">
+              {isStorm ? "⚠️ Cảnh báo mưa dông mạnh" : "⚠️ Chất lượng không khí kém"}
+            </p>
+            <p className="text-[12px] mt-0.5 opacity-80 leading-snug">
+              {isStorm
+                ? "Nguy cơ ngập úng, cây đổ. Hạn chế ra ngoài, tránh vùng trũng thấp."
+                : `PM2.5 đạt ${pm25} µg/m³ — nên đeo khẩu trang N95 khi ra ngoài.`}
+            </p>
+          </div>
+          <button onClick={() => setAlertDismissed(true)} className="shrink-0 text-[16px] opacity-50 hover:opacity-100 cursor-pointer transition-opacity">✕</button>
+        </div>
+      )}
+
+      {/* ── Hero Weather Card ───────────────────────────────────────────── */}
       <div
         data-testid="hero-weather-card"
-        className="flex flex-col gap-4 items-start overflow-hidden p-6 rounded-2xl shadow-[0px_4px_12px_0px_rgba(23,33,51,0.1)] w-full"
+        className="relative flex flex-col gap-4 items-start overflow-hidden p-6 rounded-3xl shadow-[0_12px_36px_-6px_rgba(37,99,235,0.3)] w-full transition-all duration-500 hover:scale-[1.01] lg:h-[400px] lg:justify-between border border-white/20"
         style={{ background: theme.gradient }}
       >
-        <p className="font-['Inter:Semi_Bold'] font-semibold text-[13px] text-white whitespace-nowrap">
-          📍 {data.location} · Cập nhật {data.updateTime}
-        </p>
-        <div className="flex flex-col gap-1 items-start w-full">
-          <p className="font-['Inter:Extra_Bold'] font-extrabold leading-none text-[60px] text-white whitespace-nowrap">
+        {/* Decorative blur circles */}
+        <div className="absolute -right-16 -top-16 w-64 h-64 rounded-full bg-white/20 blur-3xl pointer-events-none" />
+        <div className="absolute -left-12 -bottom-12 w-56 h-56 rounded-full bg-white/15 blur-3xl pointer-events-none" />
+
+        {/* Top row: Location badge + refresh */}
+        <div className="flex items-center justify-between w-full z-10">
+          <div className="flex items-center gap-2">
+            {showLocInput ? (
+              <input
+                autoFocus
+                value={locationInput}
+                onChange={e => setLocationInput(e.target.value)}
+                onKeyDown={handleLocKeyDown}
+                onBlur={() => { setShowLocInput(false); setLocationInput(""); }}
+                placeholder="Tên thành phố... (Enter)"
+                className="px-3 py-1.5 rounded-full bg-white/20 text-white placeholder-white/60 text-[12px] border border-white/30 focus:outline-none focus:bg-white/30 w-48 backdrop-blur-md"
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => { if (geoStatus === "denied") setShowLocInput(true); else onRequestGeo?.(); }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/15 hover:bg-white/25 active:scale-95 backdrop-blur-md border border-white/25 text-white font-medium text-[12.5px] shadow-xs cursor-pointer transition-all group"
+                title={geoStatus === "granted" ? "Vị trí thực tế của bạn" : geoStatus === "denied" ? "Nhấp để nhập tên thành phố" : "Nhấp để định vị"}
+                data-testid="hero-location-badge"
+              >
+                <span className="group-hover:scale-125 transition-transform">
+                  {geoStatus === "loading" ? "⏳" : "📍"}
+                </span>
+                <span className="underline decoration-dotted decoration-white/70 underline-offset-2">
+                  {geoStatus === "loading" ? "Đang định vị..." : data.location}
+                </span>
+                <span className="opacity-60">·</span>
+                <LiveClock location={data.location} />
+                <span className="text-[10px] bg-white/25 hover:bg-white/35 font-bold px-1.5 py-0.5 rounded-full ml-1">
+                  {geoStatus === "granted" ? "Tự động" : geoStatus === "denied" ? "Thủ công" : "Định vị"}
+                </span>
+              </button>
+            )}
+          </div>
+
+          {/* Refresh button */}
+          {onRefresh && (
+            <button
+              onClick={onRefresh}
+              disabled={isRefreshing}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-white/15 hover:bg-white/25 backdrop-blur-md border border-white/25 text-white text-[11px] font-medium cursor-pointer transition-all disabled:opacity-50"
+              title="Cập nhật thời tiết ngay"
+            >
+              <span className={`text-[14px] ${isRefreshing ? "animate-spin" : ""}`}>🔄</span>
+              <span className="hidden sm:inline">{isRefreshing ? "Đang tải..." : "Cập nhật"}</span>
+            </button>
+          )}
+        </div>
+
+        {/* Temperature + Condition */}
+        <div className="flex flex-col gap-1 items-start w-full z-10">
+          <p className="font-black leading-none text-[64px] sm:text-[72px] text-white tracking-tighter drop-shadow-md">
             {data.weather.temp}°C
           </p>
-          <p className="font-['Inter:Semi_Bold'] font-semibold text-[18px] text-white whitespace-nowrap">
-            {theme.emoji} {data.weather.description}
+          <p className="font-bold text-[18px] text-white flex items-center gap-2 drop-shadow-xs">
+            <span className="inline-block animate-bounce text-2xl" style={{ animationDuration: "3s" }}>{theme.emoji}</span>
+            <span>{data.weather.description}</span>
           </p>
-          <p className="font-['Inter:Regular'] font-normal text-[14px] text-[rgba(255,255,255,0.8)] whitespace-nowrap">
-            Cảm nhận {data.weather.feelsLike}°C
-          </p>
+          <p className="font-medium text-[13.5px] text-white/80">Cảm nhận {data.weather.feelsLike}°C</p>
         </div>
-        {/* 3 Info Boxes */}
-        <div className="flex gap-2 items-start w-full text-[13px]">
-          <div className="bg-[rgba(255,255,255,0.09)] border border-[rgba(255,255,255,0.2)] flex flex-1 flex-col gap-2 items-start min-w-0 overflow-hidden p-4 rounded-2xl">
-            <p className="font-['Inter:Bold'] font-bold text-white whitespace-nowrap">💧 Độ ẩm</p>
-            <p className="font-['Inter:Regular'] font-normal leading-5 text-[rgba(255,255,255,0.75)]">{data.weather.humidity}%</p>
+
+        {/* 4 Stats Grid */}
+        <div className="grid grid-cols-2 gap-2.5 w-full text-[13px] z-10">
+          <div className="bg-white/15 backdrop-blur-md border border-white/25 flex flex-col gap-1 items-start min-w-0 overflow-hidden p-3 rounded-2xl hover:bg-white/25 transition-all duration-300 shadow-xs">
+            <p className="font-medium text-white/90 text-[11.5px] whitespace-nowrap">💨 Gió</p>
+            <p className="font-bold leading-5 text-white text-[14px]">{data.weather.windSpeed} km/h</p>
           </div>
-          <div className="bg-[rgba(255,255,255,0.09)] border border-[rgba(255,255,255,0.2)] flex flex-1 flex-col gap-2 items-start min-w-0 overflow-hidden p-4 rounded-2xl">
-            <p className="font-['Inter:Bold'] font-bold text-white whitespace-nowrap">PM2.5</p>
-            <p className="font-['Inter:Regular'] font-normal leading-5 text-[rgba(255,255,255,0.75)]">{data.weather.pm25} µg/m³ {pm25Icon}</p>
+          <div className="bg-white/15 backdrop-blur-md border border-white/25 flex flex-col gap-1 items-start min-w-0 overflow-hidden p-3 rounded-2xl hover:bg-white/25 transition-all duration-300 shadow-xs">
+            <p className="font-medium text-white/90 text-[11.5px] whitespace-nowrap">💧 Độ ẩm</p>
+            <p className="font-bold leading-5 text-white text-[14px]">{data.weather.humidity}%</p>
           </div>
-          <div className="bg-[rgba(255,255,255,0.09)] border border-[rgba(255,255,255,0.2)] flex flex-1 flex-col gap-2 items-start min-w-0 overflow-hidden p-4 rounded-2xl">
-            <p className="font-['Inter:Bold'] font-bold text-white whitespace-nowrap">💨 Tốc độ gió</p>
-            <p className="font-['Inter:Regular'] font-normal leading-5 text-[rgba(255,255,255,0.75)]">{data.weather.windSpeed} km/h</p>
+          <div className="bg-white/15 backdrop-blur-md border border-white/25 flex flex-col gap-1 items-start min-w-0 overflow-hidden p-3 rounded-2xl hover:bg-white/25 transition-all duration-300 shadow-xs">
+            <p className="font-medium text-white/90 text-[11.5px] whitespace-nowrap">🌫️ Bụi PM2.5</p>
+            <p className="font-bold leading-5 text-white text-[14px]">{pm25} µg/m³ {pm25Icon}</p>
+          </div>
+          <div className="bg-white/15 backdrop-blur-md border border-white/25 flex flex-col gap-1 items-start min-w-0 overflow-hidden p-3 rounded-2xl hover:bg-white/25 transition-all duration-300 shadow-xs">
+            <p className="font-medium text-white/90 text-[11.5px] whitespace-nowrap">👁️ Tầm nhìn</p>
+            <p className="font-bold leading-5 text-white text-[14px]">{(data.weather as any).visibility ?? 10} km</p>
           </div>
         </div>
       </div>
 
-      {/* Forecast 3 hours */}
+      {/* ── 5-Day Forecast ───────────────────────────────────────────────── */}
       <div className="bg-white border border-[#e3e7ef] flex flex-col gap-3 items-start overflow-hidden p-4 rounded-2xl text-[13px] w-full">
         <div className="flex items-center justify-between w-full">
-          <p className="font-['Inter:Bold'] font-bold text-[#182033] whitespace-nowrap">Dự báo 3 giờ tới</p>
-          <p className="font-['Inter:Regular'] font-normal text-[#ff315f] text-[12px] cursor-pointer">Xem chi tiết →</p>
+          <p className="font-bold text-[#182033] whitespace-nowrap">📅 Dự báo 5 ngày tới</p>
+          <p className="text-[12px] text-[#5f687b]">Cập nhật mỗi 3h</p>
         </div>
-        <div className="flex gap-2 w-full">
+        <div className="flex gap-2 w-full overflow-x-auto pb-1 scrollbar-none">
           {data.forecast.map((f, i) => (
-            <div key={i} className="flex-1 bg-[#f4f6fa] rounded-xl p-3 flex flex-col items-center gap-1">
-              <p className="font-['Inter:Semi_Bold'] font-semibold text-[#182033] text-[12px]">{f.time}</p>
-              <p className="text-[22px] leading-none">{f.icon}</p>
-              <p className="font-['Inter:Bold'] font-bold text-[#182033] text-[15px]">{f.temp}°</p>
-              <p className="font-['Inter:Regular'] font-normal text-[#5f687b] text-[11px]">{f.pop}%</p>
+            <div key={i} className="flex-1 min-w-[68px] bg-[#f4f6fa] rounded-2xl p-3 flex flex-col items-center gap-1 border border-[#e3e7ef] hover:border-[#ff315f]/30 hover:bg-[#fff5f7] transition-all">
+              <p className="font-semibold text-[#182033] text-[11px] whitespace-nowrap">{f.time}</p>
+              <p className="text-[24px] leading-none">{f.icon}</p>
+              <p className="font-bold text-[#182033] text-[14px]">{f.tempMax ?? f.temp}°</p>
+              <p className="text-[#5f687b] text-[10px]">{f.tempMin ?? f.temp - 3}°</p>
+              <div className="flex items-center gap-0.5">
+                <span className="text-[10px]">💧</span>
+                <p className="text-[#3b82f6] text-[10px] font-semibold">{f.pop}%</p>
+              </div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Antigravity AI Copilot Active Card */}
+      {/* ── Antigravity AI Copilot Active Card ──────────────────────────── */}
       <div className="bg-gradient-to-br from-[#1e1b4b] via-[#2e1065] to-[#0f172a] text-white border border-indigo-500/30 flex flex-col gap-3 items-start overflow-hidden p-5 rounded-2xl shadow-xl w-full relative">
         <div className="flex items-center justify-between w-full">
           <div className="flex items-center gap-2">
@@ -1180,59 +1395,35 @@ export function WeatherColumn({
           </div>
           <span className="text-[11px] text-indigo-300 font-mono">Gemini 2.5 Flash</span>
         </div>
-
         <div className="flex flex-col gap-1 w-full">
-          <p className="font-['Inter:Bold'] font-bold text-[16px] text-white flex items-center gap-2">
-            🤖 Antigravity Copilot
-          </p>
+          <p className="font-bold text-[16px] text-white flex items-center gap-2">🤖 Antigravity Copilot</p>
           <p className="text-[12px] text-indigo-200/80 leading-relaxed">
             Hệ thống AI xử lý dữ liệu thời gian thực: phân tích tác động thời tiết, tóm tắt tin tức, đánh giá bụi mịn PM2.5 và khuyến cáo lộ trình an toàn.
           </p>
         </div>
-
-        {/* 4 Quick 1-Click Action Buttons */}
         <div className="grid grid-cols-2 gap-2 w-full pt-1">
-          <button
-            onClick={() => onOpenCopilot("weather_impact")}
-            data-testid="copilot-action-weather"
-            className="flex items-center gap-2 p-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 text-left transition-all group cursor-pointer"
-          >
+          <button onClick={() => onOpenCopilot("weather_impact")} data-testid="copilot-action-weather" className="flex items-center gap-2 p-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 text-left transition-all group cursor-pointer">
             <span className="text-[16px]">🌤️</span>
             <div className="flex flex-col min-w-0">
               <span className="text-[12px] font-semibold text-white group-hover:text-amber-300 transition-colors">Tác động thời tiết</span>
               <span className="text-[10px] text-indigo-200 truncate">Sốc nhiệt, UV, sinh hoạt</span>
             </div>
           </button>
-
-          <button
-            onClick={() => onOpenCopilot("news_digest")}
-            data-testid="copilot-action-news"
-            className="flex items-center gap-2 p-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 text-left transition-all group cursor-pointer"
-          >
+          <button onClick={() => onOpenCopilot("news_digest")} data-testid="copilot-action-news" className="flex items-center gap-2 p-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 text-left transition-all group cursor-pointer">
             <span className="text-[16px]">📰</span>
             <div className="flex flex-col min-w-0">
               <span className="text-[12px] font-semibold text-white group-hover:text-amber-300 transition-colors">Tóm tắt tin nóng</span>
               <span className="text-[10px] text-indigo-200 truncate">Điểm tin VTV24, Tuổi Trẻ</span>
             </div>
           </button>
-
-          <button
-            onClick={() => onOpenCopilot("health_pm25")}
-            data-testid="copilot-action-pm25"
-            className="flex items-center gap-2 p-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 text-left transition-all group cursor-pointer"
-          >
-            <span className="text-[16px]">🍃</span>
+          <button onClick={() => onOpenCopilot("health_pm25")} data-testid="copilot-action-pm25" className="flex items-center gap-2 p-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 text-left transition-all group cursor-pointer">
+            <span className="text-[16px]">🌱</span>
             <div className="flex flex-col min-w-0">
               <span className="text-[12px] font-semibold text-white group-hover:text-amber-300 transition-colors">Đánh giá PM2.5</span>
-              <span className="text-[10px] text-indigo-200 truncate">Cảnh báo hô hấp, y tế</span>
+              <span className="text-[10px] text-indigo-200 truncate">Cảnh báo hô hấp, y tế · {pm25Label}</span>
             </div>
           </button>
-
-          <button
-            onClick={() => onOpenCopilot("smart_route")}
-            data-testid="copilot-action-route"
-            className="flex items-center gap-2 p-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 text-left transition-all group cursor-pointer"
-          >
+          <button onClick={() => onOpenCopilot("smart_route")} data-testid="copilot-action-route" className="flex items-center gap-2 p-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 text-left transition-all group cursor-pointer">
             <span className="text-[16px]">🚗</span>
             <div className="flex flex-col min-w-0">
               <span className="text-[12px] font-semibold text-white group-hover:text-amber-300 transition-colors">Tuyến đường an toàn</span>
@@ -1240,61 +1431,61 @@ export function WeatherColumn({
             </div>
           </button>
         </div>
-
         <button
           onClick={() => onOpenCopilot(null)}
           data-testid="copilot-action-dialog"
-          className="w-full mt-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#ff315f] via-rose-500 to-amber-500 hover:opacity-95 text-white font-['Inter:Semi_Bold'] font-semibold text-[13px] flex items-center justify-center gap-2 shadow-lg transition-all cursor-pointer"
+          className="w-full mt-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#ff315f] via-rose-500 to-amber-500 hover:opacity-95 text-white font-semibold text-[13px] flex items-center justify-center gap-2 shadow-lg transition-all cursor-pointer"
         >
           <span>💬 Mở Hộp Thoại Tương Tác Trực Tiếp Với AI</span>
           <span>→</span>
         </button>
       </div>
 
-      {/* Warning */}
+      {/* ── Warning ─────────────────────────────────────────────────────── */}
       <div className="bg-[#fff7ed] border border-[#e3e7ef] flex flex-col gap-2 items-start overflow-hidden p-4 rounded-2xl text-[13px] w-full">
         <div className="flex items-center gap-2">
           <span className="text-[16px]">⚠️</span>
-          <p className="font-['Inter:Bold'] font-bold text-[#b93815]">Cảnh báo trọng tâm</p>
+          <p className="font-bold text-[#b93815]">Cảnh báo trọng tâm</p>
         </div>
-        <p className="font-['Inter:Regular'] font-normal leading-5 text-[#5f687b] w-full">{theme.warningText}</p>
+        <p className="leading-5 text-[#5f687b] w-full">{theme.warningText}</p>
       </div>
 
-      {/* Suggestion */}
+      {/* ── Suggestion ──────────────────────────────────────────────────── */}
       <div className="bg-[#f0fdf4] border border-[#e3e7ef] flex flex-col gap-2 items-start overflow-hidden p-4 rounded-2xl text-[13px] w-full">
         <div className="flex items-center gap-2">
-          <span className="text-[16px]">💡</span>
-          <p className="font-['Inter:Bold'] font-bold text-[#166534]">Gợi ý lịch trình thực tế</p>
+          <span className="text-[16px]">🌿</span>
+          <p className="font-bold text-[#166534]">Gợi ý lịch trình thực tế</p>
         </div>
         <div className="flex flex-col gap-1 w-full">
           {theme.suggestionItems.map((line, i) => (
-            <p key={i} className="font-['Inter:Regular'] font-normal leading-5 text-[#5f687b]">{line}</p>
+            <p key={i} className="leading-5 text-[#5f687b]">{line}</p>
           ))}
         </div>
       </div>
 
-      {/* Flood blackspots */}
+      {/* ── Flood blackspots ────────────────────────────────────────────── */}
       {theme.showFlood && theme.floodItems && (
         <div className="bg-white border border-[#e3e7ef] flex flex-col gap-2 items-start overflow-hidden p-4 rounded-2xl text-[13px] w-full">
-          <p className="font-['Inter:Bold'] font-bold text-[#182033]">🌊 BẢNG ĐIỂM ĐEN NGẬP ÚNG (Hà Nội)</p>
+          <p className="font-bold text-[#182033]">🌊 BẢNG ĐIỂM ĐEN NGẬP ÚNG (Hà Nội)</p>
           {theme.floodItems.map((line, i) => (
-            <p key={i} className="font-['Inter:Regular'] font-normal leading-5 text-[#5f687b]">• {line}</p>
+            <p key={i} className="leading-5 text-[#5f687b]">• {line}</p>
           ))}
         </div>
       )}
 
-      {/* Route advisory */}
+      {/* ── Route advisory ──────────────────────────────────────────────── */}
       {theme.showRouteAdvisory && theme.routeItems && (
         <div className="bg-[#eff6ff] border border-[#e3e7ef] flex flex-col gap-2 items-start overflow-hidden p-4 rounded-2xl text-[13px] w-full">
-          <p className="font-['Inter:Bold'] font-bold text-[#182033]">🛡️ KHUYẾN CÁO LỘ TRÌNH</p>
+          <p className="font-bold text-[#182033]">🛣️ KHUYẾN CÁO LỘ TRÌNH</p>
           {theme.routeItems.map((line, i) => (
-            <p key={i} className="font-['Inter:Regular'] font-normal leading-5 text-[#5f687b]">• {line}</p>
+            <p key={i} className="leading-5 text-[#5f687b]">• {line}</p>
           ))}
         </div>
       )}
     </div>
   );
 }
+
 
 // ── Ultra-Stylish Video Hub Component ─────────────────────────────────────
 
@@ -1500,11 +1691,19 @@ export function MobileLayout({
   onPlayVideo,
   onOpenCopilot,
   onSelectArticle,
+  geoStatus,
+  onRequestGeo,
+  onRefresh,
+  isRefreshing,
 }: {
   data: AppData;
   onPlayVideo: (v: VideoItem) => void;
   onOpenCopilot: (action: string | null) => void;
   onSelectArticle?: (article: NewsArticle) => void;
+  geoStatus?: "idle" | "loading" | "granted" | "denied";
+  onRequestGeo?: () => void;
+  onRefresh?: () => void;
+  isRefreshing?: boolean;
 }) {
   return (
     <div className="bg-[#f4f6fa] flex flex-col items-start w-full">
@@ -1532,7 +1731,7 @@ export function MobileLayout({
         {/* Weather section */}
         <div className="flex flex-col gap-3 items-start w-full">
           <p className="font-['Inter:Semi_Bold'] font-semibold leading-[26px] text-[#182033] text-[20px]">Thời tiết</p>
-          <WeatherColumn data={data} onOpenCopilot={onOpenCopilot} />
+          <WeatherColumn data={data} onOpenCopilot={onOpenCopilot} geoStatus={geoStatus} onRequestGeo={onRequestGeo} onRefresh={onRefresh} isRefreshing={isRefreshing} />
         </div>
 
         {/* Video Hub Section */}
@@ -1624,11 +1823,19 @@ export function TabletLayout({
   onPlayVideo,
   onOpenCopilot,
   onSelectArticle,
+  geoStatus,
+  onRequestGeo,
+  onRefresh,
+  isRefreshing,
 }: {
   data: AppData;
   onPlayVideo: (v: VideoItem) => void;
   onOpenCopilot: (action: string | null) => void;
   onSelectArticle?: (article: NewsArticle) => void;
+  geoStatus?: "idle" | "loading" | "granted" | "denied";
+  onRequestGeo?: () => void;
+  onRefresh?: () => void;
+  isRefreshing?: boolean;
 }) {
   const feat = data.news[0];
   const sides = data.news.slice(1, 5);
@@ -1664,7 +1871,7 @@ export function TabletLayout({
         <div className="flex gap-5 items-start w-full">
           {/* Weather column */}
           <div className="flex flex-col gap-3 items-start shrink-0 w-[calc(50%-10px)] max-w-[560px]">
-            <WeatherColumn data={data} onOpenCopilot={onOpenCopilot} />
+            <WeatherColumn data={data} onOpenCopilot={onOpenCopilot} geoStatus={geoStatus} onRequestGeo={onRequestGeo} onRefresh={onRefresh} isRefreshing={isRefreshing} />
           </div>
 
           {/* News column */}
@@ -1757,6 +1964,10 @@ export function DesktopLayout({
   searchQuery,
   onSearchChange,
   onStartVisualTest,
+  geoStatus,
+  onRequestGeo,
+  onRefresh,
+  isRefreshing,
 }: {
   data: AppData;
   onPlayVideo: (v: VideoItem) => void;
@@ -1765,6 +1976,10 @@ export function DesktopLayout({
   searchQuery?: string;
   onSearchChange?: (q: string) => void;
   onStartVisualTest?: () => void;
+  geoStatus?: "idle" | "loading" | "granted" | "denied";
+  onRequestGeo?: () => void;
+  onRefresh?: () => void;
+  isRefreshing?: boolean;
 }) {
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [visibleCount, setVisibleCount] = useState<number>(5);
@@ -1868,7 +2083,7 @@ export function DesktopLayout({
       <div className="flex gap-6 items-start p-6 w-full">
         {/* Left Column (Weather) */}
         <div className="flex flex-col gap-4 items-start shrink-0 w-[420px]">
-          <WeatherColumn data={data} onOpenCopilot={onOpenCopilot} />
+          <WeatherColumn data={data} onOpenCopilot={onOpenCopilot} geoStatus={geoStatus} onRequestGeo={onRequestGeo} onRefresh={onRefresh} isRefreshing={isRefreshing} />
         </div>
 
         {/* Right Column (News + Videos Hub) */}
@@ -2089,6 +2304,7 @@ export default function App() {
   const [data, setData] = useState<AppData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('pulse_dark') === '1');
   const [activeVideo, setActiveVideo] = useState<VideoItem | null>(null);
   const [activeArticle, setActiveArticle] = useState<NewsArticle | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -2111,10 +2327,18 @@ export default function App() {
     setCopilotOpen(true);
   }, []);
 
-  const loadData = useCallback(async () => {
+  const [geo, requestGeo] = useGeoLocation();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const loadData = useCallback(async (silent = false) => {
     try {
+      if (!silent) setLoading(true);
+      else setIsRefreshing(true);
+      const lat = geo.lat || DEFAULT_LAT;
+      const lon = geo.lon || DEFAULT_LON;
+      const locName = geo.name || DEFAULT_LOCATION;
       const [weatherResult, newsResult, videoResult] = await Promise.all([
-        fetchWeatherDirect(),
+        fetchWeatherDirect(lat, lon),
         fetchNews(),
         fetchVideos(),
       ]);
@@ -2129,24 +2353,33 @@ export default function App() {
         news: newsResult,
         videos: videoResult,
         updateTime: `${timeStr} ${ampm}`,
-        location: DEFAULT_LOCATION,
+        location: locName,
       });
       setError(null);
       setLoading(false);
+      setIsRefreshing(false);
     } catch (err: any) {
       console.error("Load data failed:", err);
       setError(err.message || "Lỗi tải dữ liệu");
       setLoading(false);
+      setIsRefreshing(false);
     }
-  }, []);
+  }, [geo.lat, geo.lon, geo.name]);
 
   useEffect(() => {
     loadData();
-    refreshRef.current = setInterval(loadData, 5 * 60 * 1000);
+    refreshRef.current = setInterval(() => loadData(true), 5 * 60 * 1000);
     return () => {
       if (refreshRef.current) clearInterval(refreshRef.current);
     };
   }, [loadData]);
+
+  // Re-fetch weather when geolocation changes
+  useEffect(() => {
+    if (geo.status === "granted" && data) {
+      loadData(true);
+    }
+  }, [geo.lat, geo.lon]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) return <LoadingSkeleton />;
 
@@ -2167,7 +2400,16 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen w-full bg-[#f4f6fa] relative">
+    <div className={`min-h-screen w-full ${darkMode ? "dark bg-[#0f172a]" : "bg-[#f4f6fa]"} relative`}>
+      {/* Dark mode toggle */}
+      <button
+        onClick={() => { const nd = !darkMode; setDarkMode(nd); localStorage.setItem('pulse_dark', nd ? '1' : '0'); }}
+        className="fixed top-3 left-3 z-30 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm border border-[#e3e7ef] rounded-full px-3 py-1.5 flex items-center gap-1.5 shadow-sm text-[12px] font-medium text-[#5f687b] hover:text-[#182033] transition-colors cursor-pointer"
+        title="Chuyển chế độ sáng/tối"
+      >
+        <span>{darkMode ? "☀️" : "🌙"}</span>
+        <span className="hidden sm:inline">{darkMode ? "Sáng" : "Tối"}</span>
+      </button>
       {/* Live status badge top-right */}
       <div className="fixed top-3 right-3 z-30 bg-white/80 backdrop-blur-sm border border-[#e3e7ef] rounded-full px-3 py-1 flex items-center gap-2 shadow-sm">
         <div className="size-2 rounded-full bg-[#22c55e] animate-pulse" />
@@ -2219,6 +2461,10 @@ export default function App() {
           onPlayVideo={setActiveVideo}
           onOpenCopilot={handleOpenCopilot}
           onSelectArticle={setActiveArticle}
+          geoStatus={geo.status}
+          onRequestGeo={requestGeo}
+          onRefresh={() => loadData(true)}
+          isRefreshing={isRefreshing}
         />
       </div>
       <div className="hidden md:block xl:hidden">
@@ -2227,6 +2473,10 @@ export default function App() {
           onPlayVideo={setActiveVideo}
           onOpenCopilot={handleOpenCopilot}
           onSelectArticle={setActiveArticle}
+          geoStatus={geo.status}
+          onRequestGeo={requestGeo}
+          onRefresh={() => loadData(true)}
+          isRefreshing={isRefreshing}
         />
       </div>
       <div className="hidden xl:block">
@@ -2238,6 +2488,10 @@ export default function App() {
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
           onStartVisualTest={() => setVisualTestOpen(true)}
+          geoStatus={geo.status}
+          onRequestGeo={requestGeo}
+          onRefresh={() => loadData(true)}
+          isRefreshing={isRefreshing}
         />
       </div>
 
