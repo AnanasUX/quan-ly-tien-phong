@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { VisualTestRunner } from "./VisualTestRunner";
 
-const assetPathPrefix = "/assets";
+const assetPathPrefix = `${(import.meta.env.BASE_URL || "/").replace(/\/$/, "")}/assets`;
 const imgMoreHorizontal = `${assetPathPrefix}/eff74.svg`;
 const imgSearch = `${assetPathPrefix}/ad518.svg`;
 const imgNews1 = `${assetPathPrefix}/c0fcf.png`;
