@@ -54,51 +54,90 @@ const DEFAULT_LON = 105.7725;
 const DEFAULT_LOCATION = "Hà Nội";
 const BACKEND_URL = "https://quan-ly-tien-phong-main.onrender.com";
 
-// ── Geolocation Hook ──────────────────────────────────────────────────────
-type GeoState = { status: "idle" | "loading" | "granted" | "denied"; lat: number; lon: number; name: string };
+// ── Geolocation & Location Services ───────────────────────────────────────
+export type GeoSource = "gps" | "ip" | "manual" | "default";
+export type GeoState = {
+  status: "idle" | "loading" | "granted" | "denied";
+  lat: number;
+  lon: number;
+  name: string;
+  source: GeoSource;
+};
 
-function useGeoLocation(): [GeoState, () => void] {
-  const [geo, setGeo] = useState<GeoState>(() => {
-    try {
-      const saved = localStorage.getItem("pulse_location");
-      if (saved) {
-        const p = JSON.parse(saved);
-        if (p.lat && p.lon && p.name) return { status: "granted", lat: p.lat, lon: p.lon, name: p.name };
+export const POPULAR_LOCATIONS = [
+  { name: "TP. Hồ Chí Minh", lat: 10.8231, lon: 106.6297, icon: "🏙️" },
+  { name: "Hà Nội", lat: 21.0285, lon: 105.8542, icon: "🏛️" },
+  { name: "Đà Nẵng", lat: 16.0544, lon: 108.2022, icon: "🌉" },
+  { name: "Hải Phòng", lat: 20.8449, lon: 106.6881, icon: "⚓" },
+  { name: "Cần Thơ", lat: 10.0452, lon: 105.7469, icon: "🛶" },
+  { name: "Nha Trang", lat: 12.2388, lon: 109.1967, icon: "🏖️" },
+  { name: "Huế", lat: 16.4637, lon: 107.5909, icon: "🏯" },
+  { name: "Vũng Tàu", lat: 10.3460, lon: 107.0843, icon: "🌊" },
+  { name: "Đà Lạt", lat: 11.9404, lon: 108.4583, icon: "🌲" },
+  { name: "Hạ Long", lat: 20.9505, lon: 107.0734, icon: "⛵" },
+  { name: "Bình Dương", lat: 11.1667, lon: 106.6667, icon: "🏭" },
+  { name: "Đồng Nai", lat: 11.0500, lon: 107.0000, icon: "🌾" },
+];
+
+function normalizeVietnameseCity(city: string): string {
+  if (!city) return DEFAULT_LOCATION;
+  const c = city.trim().toLowerCase();
+  if (c.includes("ho chi minh") || c.includes("saigon") || c.includes("sai gon")) return "TP. Hồ Chí Minh";
+  if (c.includes("da nang") || c.includes("danang")) return "Đà Nẵng";
+  if (c.includes("hai phong") || c.includes("haiphong")) return "Hải Phòng";
+  if (c.includes("can tho") || c.includes("cantho")) return "Cần Thơ";
+  if (c.includes("nha trang")) return "Nha Trang";
+  if (c.includes("hue") || c.includes("thua thien")) return "Huế";
+  if (c.includes("vung tau") || c.includes("ba ria")) return "Vũng Tàu";
+  if (c.includes("da lat") || c.includes("dalat") || c.includes("lam dong")) return "Đà Lạt";
+  if (c.includes("ha long") || c.includes("halong") || c.includes("quang ninh")) return "Hạ Long";
+  if (c.includes("bien hoa") || c.includes("dong nai")) return "Đồng Nai";
+  if (c.includes("thu dau mot") || c.includes("binh duong")) return "Bình Dương";
+  if (c.includes("quy nhon") || c.includes("binh dinh")) return "Quy Nhơn";
+  if (c.includes("buon ma thuot") || c.includes("dak lak")) return "Buôn Ma Thuột";
+  if (c.includes("phan thiet") || c.includes("binh thuan")) return "Phan Thiết";
+  if (c.includes("son tay")) return "Sơn Tây, Hà Nội";
+  if (c.includes("ha dong")) return "Hà Đông, Hà Nội";
+  if (c.includes("nam dinh")) return "Nam Định";
+  if (c.includes("thai nguyen")) return "Thái Nguyên";
+  if (c.includes("bac ninh")) return "Bắc Ninh";
+  if (c.includes("vinh") || c.includes("nghe an")) return "Vinh";
+  if (c.includes("hanoi") || c.includes("ha noi")) return "Hà Nội";
+  return city;
+}
+
+async function detectIPLocation(): Promise<{ lat: number; lon: number; name: string } | null> {
+  // 1. ipwho.is (CORS free, fast)
+  try {
+    const res = await fetch("https://ipwho.is/", { signal: AbortSignal.timeout(3500) });
+    if (res.ok) {
+      const d = await res.json();
+      if (d && d.success !== false && d.latitude && d.longitude) {
+        return {
+          lat: Math.round(d.latitude * 10000) / 10000,
+          lon: Math.round(d.longitude * 10000) / 10000,
+          name: normalizeVietnameseCity(d.city || d.region || "Việt Nam"),
+        };
       }
-    } catch {}
-    return { status: "idle", lat: DEFAULT_LAT, lon: DEFAULT_LON, name: DEFAULT_LOCATION };
-  });
-
-  const request = useCallback(() => {
-    if (!navigator.geolocation) {
-      setGeo(g => ({ ...g, status: "denied" }));
-      return;
     }
-    setGeo(g => ({ ...g, status: "loading" }));
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const lat = Math.round(pos.coords.latitude * 10000) / 10000;
-        const lon = Math.round(pos.coords.longitude * 10000) / 10000;
-        let name = DEFAULT_LOCATION;
-        try {
-          const r = await fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${OWM_KEY}&lang=vi`);
-          if (r.ok) { const d = await r.json(); name = d.name || DEFAULT_LOCATION; }
-        } catch {}
-        const newGeo = { status: "granted" as const, lat, lon, name };
-        setGeo(newGeo);
-        localStorage.setItem("pulse_location", JSON.stringify({ lat, lon, name }));
-      },
-      () => { setGeo(g => ({ ...g, status: "denied" })); },
-      { timeout: 8000, maximumAge: 5 * 60 * 1000 }
-    );
-  }, []);
+  } catch {}
 
-  useEffect(() => {
-    const saved = localStorage.getItem("pulse_location");
-    if (!saved) request();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // 2. geojs.io fallback
+  try {
+    const res = await fetch("https://get.geojs.io/v1/ip/geo.json", { signal: AbortSignal.timeout(3500) });
+    if (res.ok) {
+      const d = await res.json();
+      if (d && d.latitude && d.longitude) {
+        return {
+          lat: Math.round(parseFloat(d.latitude) * 10000) / 10000,
+          lon: Math.round(parseFloat(d.longitude) * 10000) / 10000,
+          name: normalizeVietnameseCity(d.city || d.region || "Việt Nam"),
+        };
+      }
+    }
+  } catch {}
 
-  return [geo, request];
+  return null;
 }
 
 // ── Manual location change (city name search) ─────────────────────────────
@@ -113,7 +152,265 @@ async function geocodeCity(cityName: string): Promise<{ lat: number; lon: number
   return null;
 }
 
+function useGeoLocation(): {
+  geo: GeoState;
+  requestGPS: () => Promise<void>;
+  requestIP: () => Promise<void>;
+  setManualLocation: (loc: { lat: number; lon: number; name: string }) => void;
+} {
+  const [geo, setGeo] = useState<GeoState>(() => {
+    try {
+      const savedManual = localStorage.getItem("pulse_manual_location");
+      if (savedManual) {
+        const p = JSON.parse(savedManual);
+        if (p.lat && p.lon && p.name) return { status: "granted", lat: p.lat, lon: p.lon, name: p.name, source: "manual" };
+      }
+    } catch {}
+    return { status: "loading", lat: DEFAULT_LAT, lon: DEFAULT_LON, name: DEFAULT_LOCATION, source: "default" };
+  });
 
+  const requestGPS = useCallback(async () => {
+    if (!navigator.geolocation) {
+      const ipLoc = await detectIPLocation();
+      if (ipLoc) setGeo({ status: "granted", ...ipLoc, source: "ip" });
+      else setGeo(g => ({ ...g, status: "denied" }));
+      return;
+    }
+    setGeo(g => ({ ...g, status: "loading" }));
+    return new Promise<void>((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          const lat = Math.round(pos.coords.latitude * 10000) / 10000;
+          const lon = Math.round(pos.coords.longitude * 10000) / 10000;
+          let name = DEFAULT_LOCATION;
+          try {
+            const r = await fetch(`https://api.openweathermap.org/geo/1.0/reverse?lat=${lat}&lon=${lon}&limit=1&appid=${OWM_KEY}`);
+            if (r.ok) {
+              const d = await r.json();
+              if (d && d.length > 0) {
+                name = d[0].local_names?.vi || d[0].name || DEFAULT_LOCATION;
+              }
+            }
+          } catch {}
+          const newGeo: GeoState = { status: "granted", lat, lon, name, source: "gps" };
+          setGeo(newGeo);
+          localStorage.removeItem("pulse_manual_location");
+          resolve();
+        },
+        async () => {
+          const ipLoc = await detectIPLocation();
+          if (ipLoc) setGeo({ status: "granted", ...ipLoc, source: "ip" });
+          else setGeo(g => ({ ...g, status: "denied" }));
+          resolve();
+        },
+        { timeout: 7000, enableHighAccuracy: true, maximumAge: 60000 }
+      );
+    });
+  }, []);
+
+  const requestIP = useCallback(async () => {
+    setGeo(g => ({ ...g, status: "loading" }));
+    const ipLoc = await detectIPLocation();
+    if (ipLoc) {
+      setGeo({ status: "granted", ...ipLoc, source: "ip" });
+      localStorage.removeItem("pulse_manual_location");
+    } else {
+      setGeo(g => ({ ...g, status: "denied" }));
+    }
+  }, []);
+
+  const setManualLocation = useCallback((loc: { lat: number; lon: number; name: string }) => {
+    const newGeo: GeoState = { status: "granted", ...loc, source: "manual" };
+    setGeo(newGeo);
+    localStorage.setItem("pulse_manual_location", JSON.stringify(loc));
+  }, []);
+
+  useEffect(() => {
+    try {
+      const savedManual = localStorage.getItem("pulse_manual_location");
+      if (savedManual) {
+        const p = JSON.parse(savedManual);
+        if (p.lat && p.lon && p.name) {
+          setGeo({ status: "granted", ...p, source: "manual" });
+          return;
+        }
+      }
+    } catch {}
+
+    // Auto-detect immediately:
+    // 1. Fire IP detection first (takes ~150ms)
+    detectIPLocation().then((ipLoc) => {
+      if (ipLoc) {
+        setGeo(curr => {
+          if (curr.source === "gps" || curr.source === "manual") return curr;
+          return { status: "granted", ...ipLoc, source: "ip" };
+        });
+      }
+    });
+
+    // 2. Also request device GPS in background
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          const lat = Math.round(pos.coords.latitude * 10000) / 10000;
+          const lon = Math.round(pos.coords.longitude * 10000) / 10000;
+          let name = "";
+          try {
+            const r = await fetch(`https://api.openweathermap.org/geo/1.0/reverse?lat=${lat}&lon=${lon}&limit=1&appid=${OWM_KEY}`);
+            if (r.ok) {
+              const d = await r.json();
+              if (d && d.length > 0) name = d[0].local_names?.vi || d[0].name;
+            }
+          } catch {}
+          if (!name) name = DEFAULT_LOCATION;
+          setGeo({ status: "granted", lat, lon, name, source: "gps" });
+        },
+        () => {},
+        { timeout: 8000, enableHighAccuracy: true, maximumAge: 60000 }
+      );
+    }
+  }, []);
+
+  return { geo, requestGPS, requestIP, setManualLocation };
+}
+
+// ── Location Picker Modal ──────────────────────────────────────────────────
+export function LocationPickerModal({
+  isOpen,
+  onClose,
+  currentLocation,
+  onSelectLocation,
+  onAutoGPS,
+  onAutoIP,
+  geoSource,
+  loading,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  currentLocation: string;
+  onSelectLocation: (loc: { lat: number; lon: number; name: string }) => void;
+  onAutoGPS: () => void;
+  onAutoIP: () => void;
+  geoSource?: GeoSource;
+  loading?: boolean;
+}) {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState("");
+
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!searchTerm.trim()) return;
+    setSearching(true);
+    setSearchError("");
+    try {
+      const res = await geocodeCity(searchTerm.trim());
+      if (res) {
+        onSelectLocation(res);
+        onClose();
+        setSearchTerm("");
+      } else {
+        setSearchError(`Không tìm thấy "${searchTerm}". Thử nhập: Đà Nẵng, TP.HCM, Nha Trang...`);
+      }
+    } catch {
+      setSearchError("Lỗi kết nối khi tìm kiếm địa điểm.");
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="relative w-full max-w-lg bg-[#0f172a] rounded-3xl overflow-hidden border border-white/15 shadow-[0_20px_60px_rgba(0,0,0,0.7)] text-white flex flex-col max-h-[85vh]">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-blue-900/60 via-indigo-900/60 to-purple-900/60 border-b border-white/10">
+          <div className="flex items-center gap-2.5">
+            <span className="size-8 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-lg">📍</span>
+            <div>
+              <p className="font-bold text-[15px]">Chọn Vị Trí Thời Tiết</p>
+              <p className="text-[11px] text-gray-300">
+                Hiện tại: <strong className="text-white">{currentLocation}</strong> ({geoSource === "gps" ? "GPS Thiết Bị" : geoSource === "ip" ? "IP Mạng" : geoSource === "manual" ? "Thủ Công" : "Tự Động"})
+              </p>
+            </div>
+          </div>
+          <button onClick={onClose} className="size-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center text-sm cursor-pointer transition-colors">✕</button>
+        </div>
+
+        <div className="p-5 flex flex-col gap-4 overflow-y-auto">
+          {/* Quick Auto Buttons */}
+          <div className="grid grid-cols-2 gap-2.5">
+            <button
+              onClick={() => { onAutoGPS(); onClose(); }}
+              disabled={loading}
+              className="flex items-center gap-2.5 p-3 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white transition-all shadow-md cursor-pointer text-left active:scale-95"
+            >
+              <span className="text-xl">🎯</span>
+              <div className="min-w-0">
+                <p className="font-bold text-[12px] leading-tight">Định Vị GPS</p>
+                <p className="text-[10px] text-blue-100 opacity-90 truncate">Chính xác theo thiết bị</p>
+              </div>
+            </button>
+
+            <button
+              onClick={() => { onAutoIP(); onClose(); }}
+              disabled={loading}
+              className="flex items-center gap-2.5 p-3 rounded-2xl bg-white/10 hover:bg-white/15 border border-white/10 text-white transition-all cursor-pointer text-left active:scale-95"
+            >
+              <span className="text-xl">🌐</span>
+              <div className="min-w-0">
+                <p className="font-bold text-[12px] leading-tight">Dò Theo IP Mạng</p>
+                <p className="text-[10px] text-gray-300 opacity-90 truncate">Không cần cấp quyền GPS</p>
+              </div>
+            </button>
+          </div>
+
+          {/* Search form */}
+          <form onSubmit={handleSearch} className="flex gap-2">
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              placeholder="Nhập tên tỉnh/thành phố (Enter)..."
+              className="flex-1 bg-white/10 border border-white/15 rounded-xl px-4 py-2.5 text-[13px] text-white placeholder-gray-400 focus:outline-none focus:border-blue-400"
+            />
+            <button
+              type="submit"
+              disabled={searching || !searchTerm.trim()}
+              className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold text-[13px] cursor-pointer"
+            >
+              {searching ? "Tìm..." : "Tìm"}
+            </button>
+          </form>
+
+          {searchError && <p className="text-rose-400 text-[12px]">{searchError}</p>}
+
+          {/* Popular Cities */}
+          <div className="flex flex-col gap-2 pt-1">
+            <p className="text-[11.5px] font-semibold text-gray-400 uppercase tracking-wider">Thành Phố Phổ Biến</p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {POPULAR_LOCATIONS.map(loc => (
+                <button
+                  key={loc.name}
+                  onClick={() => { onSelectLocation(loc); onClose(); }}
+                  className={`flex items-center gap-2 p-2.5 rounded-xl text-left transition-all border cursor-pointer active:scale-95 ${
+                    currentLocation.includes(loc.name) || loc.name.includes(currentLocation)
+                      ? "bg-blue-500/25 border-blue-400/50 text-white shadow-sm"
+                      : "bg-white/5 hover:bg-white/10 border-white/10 text-gray-200 hover:text-white"
+                  }`}
+                >
+                  <span className="text-[16px]">{loc.icon}</span>
+                  <span className="text-[12px] font-medium truncate">{loc.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ── Weather Types ─────────────────────────────────────────────────────────
 
@@ -135,7 +432,7 @@ interface WeatherTheme {
 export const WEATHER_THEMES: Record<ConditionKey, WeatherTheme> = {
   "binh-thuong": {
     key: "binh-thuong",
-    gradient: "linear-gradient(135deg, #506477 0%, #73879a 50%, #9aa9b5 100%)",
+    gradient: "linear-gradient(135deg, #1e3a8a 0%, #2563eb 25%, #0284c7 50%, #0d9488 75%, #4f46e5 100%)",
     emoji: "☁️", label: "Bình thường",
     warningText: "Thời tiết ổn định, ít biến động. Không có hiện tượng bất thường đáng chú ý.",
     suggestionItems: [
@@ -146,7 +443,7 @@ export const WEATHER_THEMES: Record<ConditionKey, WeatherTheme> = {
   },
   "nang": {
     key: "nang",
-    gradient: "linear-gradient(135deg, #1e73be 0%, #58a8dc 50%, #f7a928 100%)",
+    gradient: "linear-gradient(135deg, #0369a1 0%, #0284c7 25%, #f59e0b 55%, #ea580c 80%, #db2777 100%)",
     emoji: "☀️", label: "Nắng",
     warningText: "Trời nắng đẹp, tầm nhìn tốt. Chỉ số UV ở mức trung bình đến cao.",
     suggestionItems: [
@@ -157,7 +454,7 @@ export const WEATHER_THEMES: Record<ConditionKey, WeatherTheme> = {
   },
   "nang-gat": {
     key: "nang-gat",
-    gradient: "linear-gradient(135deg, #b93815 0%, #ef6c20 50%, #f7a928 100%)",
+    gradient: "linear-gradient(135deg, #991b1b 0%, #c2410c 25%, #ea580c 50%, #f59e0b 75%, #e11d48 100%)",
     emoji: "🔥", label: "Nắng gắt",
     warningText: "Nắng nóng gay gắt, chỉ số UV rất cao. Nguy cơ say nắng, mất nước cao nếu hoạt động ngoài trời lâu.",
     suggestionItems: [
@@ -168,7 +465,7 @@ export const WEATHER_THEMES: Record<ConditionKey, WeatherTheme> = {
   },
   "am-u": {
     key: "am-u",
-    gradient: "linear-gradient(135deg, #34495e 0%, #52697e 50%, #75889a 100%)",
+    gradient: "linear-gradient(135deg, #1e293b 0%, #334155 30%, #475569 55%, #3b82f6 80%, #6366f1 100%)",
     emoji: "🌥️", label: "Âm u",
     warningText: "Trời nhiều mây, ánh sáng yếu. Có thể chuyển mưa nhẹ trong vài giờ tới nếu độ ẩm tăng cao.",
     suggestionItems: [
@@ -179,7 +476,7 @@ export const WEATHER_THEMES: Record<ConditionKey, WeatherTheme> = {
   },
   "mua-nho": {
     key: "mua-nho",
-    gradient: "linear-gradient(135deg, #1e3a5f 0%, #2d6a9f 50%, #4c93c3 100%)",
+    gradient: "linear-gradient(135deg, #0f172a 0%, #1e3a8a 30%, #0369a1 60%, #0d9488 85%, #0284c7 100%)",
     emoji: "🌦️", label: "Mưa nhỏ",
     warningText: "Mưa nhỏ diện rộng, tầm nhìn giảm nhẹ. Mặt đường bắt đầu ướt, ma sát giảm.",
     suggestionItems: [
@@ -192,7 +489,7 @@ export const WEATHER_THEMES: Record<ConditionKey, WeatherTheme> = {
   },
   "mua-dong": {
     key: "mua-dong",
-    gradient: "linear-gradient(135deg, #111827 0%, #293a55 50%, #475569 100%)",
+    gradient: "linear-gradient(135deg, #090d16 0%, #1e1b4b 25%, #4c1d95 50%, #1d4ed8 75%, #0f172a 100%)",
     emoji: "⛈️", label: "Mưa dông",
     warningText: "Mưa dông kèm sấm chớp, gió giật mạnh cục bộ. Nguy cơ ngập úng nhanh, cây đổ, mất điện.",
     suggestionItems: [
@@ -1210,14 +1507,16 @@ export function WeatherColumn({
   data,
   onOpenCopilot,
   geoStatus,
-  onRequestGeo,
+  geoSource,
+  onOpenLocationModal,
   onRefresh,
   isRefreshing,
 }: {
   data: AppData;
   onOpenCopilot: (action: string | null) => void;
   geoStatus?: "idle" | "loading" | "granted" | "denied";
-  onRequestGeo?: () => void;
+  geoSource?: GeoSource;
+  onOpenLocationModal?: () => void;
   onRefresh?: () => void;
   isRefreshing?: boolean;
 }) {
@@ -1228,21 +1527,6 @@ export function WeatherColumn({
   const isStorm = data.weather.condKey === "mua-dong";
   const isBadAir = data.weather.aqiLevel >= 4;
   const [alertDismissed, setAlertDismissed] = useState(false);
-  const [locationInput, setLocationInput] = useState("");
-  const [showLocInput, setShowLocInput] = useState(false);
-
-  const handleLocKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && locationInput.trim()) {
-      const result = await geocodeCity(locationInput.trim());
-      if (result) {
-        localStorage.setItem("pulse_location", JSON.stringify(result));
-        window.location.reload();
-      }
-      setShowLocInput(false);
-      setLocationInput("");
-    }
-    if (e.key === "Escape") { setShowLocInput(false); setLocationInput(""); }
-  };
 
   return (
     <div className="flex flex-col gap-4 w-full">
@@ -1269,61 +1553,51 @@ export function WeatherColumn({
         </div>
       )}
 
-      {/* ── Hero Weather Card ───────────────────────────────────────────── */}
+      {/* ── Hero Weather Card with CSS Morphing Gradients Animated Background ── */}
       <div
         data-testid="hero-weather-card"
-        className="relative flex flex-col gap-4 items-start overflow-hidden p-6 rounded-3xl shadow-[0_12px_36px_-6px_rgba(37,99,235,0.3)] w-full transition-all duration-500 hover:scale-[1.01] lg:h-[400px] lg:justify-between border border-white/20"
+        className="relative flex flex-col gap-4 items-start overflow-hidden p-6 rounded-3xl shadow-[0_16px_40px_-8px_rgba(37,99,235,0.38)] w-full transition-all duration-500 hover:scale-[1.01] lg:h-[400px] lg:justify-between border border-white/25 animate-morph-gradient"
         style={{ background: theme.gradient }}
       >
-        {/* Decorative blur circles */}
-        <div className="absolute -right-16 -top-16 w-64 h-64 rounded-full bg-white/20 blur-3xl pointer-events-none" />
-        <div className="absolute -left-12 -bottom-12 w-56 h-56 rounded-full bg-white/15 blur-3xl pointer-events-none" />
+        {/* CSS Morphing Gradients Animated Liquid Blobs */}
+        <div className="absolute -right-12 -top-12 w-64 h-64 rounded-full bg-gradient-to-br from-white/30 via-sky-300/30 to-blue-500/25 blur-2xl pointer-events-none animate-morph-blob-1" />
+        <div className="absolute -left-12 -bottom-12 w-72 h-72 rounded-full bg-gradient-to-tr from-cyan-400/30 via-indigo-400/25 to-purple-500/30 blur-2xl pointer-events-none animate-morph-blob-2" />
+        <div className="absolute left-1/3 top-1/4 w-48 h-48 rounded-full bg-gradient-to-r from-amber-300/20 via-pink-400/20 to-violet-400/25 blur-3xl pointer-events-none animate-morph-blob-3" />
+
+        {/* Shimmer light glass overlay */}
+        <div className="absolute inset-0 bg-gradient-to-b from-white/10 via-transparent to-black/20 pointer-events-none" />
 
         {/* Top row: Location badge + refresh */}
         <div className="flex items-center justify-between w-full z-10">
-          <div className="flex items-center gap-2">
-            {showLocInput ? (
-              <input
-                autoFocus
-                value={locationInput}
-                onChange={e => setLocationInput(e.target.value)}
-                onKeyDown={handleLocKeyDown}
-                onBlur={() => { setShowLocInput(false); setLocationInput(""); }}
-                placeholder="Tên thành phố... (Enter)"
-                className="px-3 py-1.5 rounded-full bg-white/20 text-white placeholder-white/60 text-[12px] border border-white/30 focus:outline-none focus:bg-white/30 w-48 backdrop-blur-md"
-              />
-            ) : (
-              <button
-                type="button"
-                onClick={() => { if (geoStatus === "denied") setShowLocInput(true); else onRequestGeo?.(); }}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/15 hover:bg-white/25 active:scale-95 backdrop-blur-md border border-white/25 text-white font-medium text-[12.5px] shadow-xs cursor-pointer transition-all group"
-                title={geoStatus === "granted" ? "Vị trí thực tế của bạn" : geoStatus === "denied" ? "Nhấp để nhập tên thành phố" : "Nhấp để định vị"}
-                data-testid="hero-location-badge"
-              >
-                <span className="group-hover:scale-125 transition-transform">
-                  {geoStatus === "loading" ? "⏳" : "📍"}
-                </span>
-                <span className="underline decoration-dotted decoration-white/70 underline-offset-2">
-                  {geoStatus === "loading" ? "Đang định vị..." : data.location}
-                </span>
-                <span className="opacity-60">·</span>
-                <LiveClock location={data.location} />
-                <span className="text-[10px] bg-white/25 hover:bg-white/35 font-bold px-1.5 py-0.5 rounded-full ml-1">
-                  {geoStatus === "granted" ? "Tự động" : geoStatus === "denied" ? "Thủ công" : "Định vị"}
-                </span>
-              </button>
-            )}
-          </div>
+          <button
+            type="button"
+            onClick={onOpenLocationModal}
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white/20 hover:bg-white/30 active:scale-95 backdrop-blur-md border border-white/30 text-white font-medium text-[12.5px] shadow-sm cursor-pointer transition-all group"
+            title="Nhấp để đổi vị trí hoặc chọn định vị GPS / IP"
+            data-testid="hero-location-badge"
+          >
+            <span className="group-hover:scale-125 transition-transform">
+              {geoStatus === "loading" ? "⏳" : geoSource === "gps" ? "🎯" : "📍"}
+            </span>
+            <span className="underline decoration-dotted decoration-white/70 underline-offset-2">
+              {geoStatus === "loading" ? "Đang định vị..." : data.location}
+            </span>
+            <span className="opacity-60">·</span>
+            <LiveClock location={data.location} />
+            <span className="text-[10px] bg-white/25 hover:bg-white/40 font-bold px-2 py-0.5 rounded-full ml-1">
+              {geoSource === "gps" ? "GPS Tự động" : geoSource === "ip" ? "IP Tự động" : geoSource === "manual" ? "Thủ công" : "Tự động"}
+            </span>
+          </button>
 
           {/* Refresh button */}
           {onRefresh && (
             <button
               onClick={onRefresh}
               disabled={isRefreshing}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-white/15 hover:bg-white/25 backdrop-blur-md border border-white/25 text-white text-[11px] font-medium cursor-pointer transition-all disabled:opacity-50"
-              title="Cập nhật thời tiết ngay"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/30 text-white text-[11px] font-medium cursor-pointer transition-all disabled:opacity-50 active:scale-95 shadow-sm"
+              title="Cập nhật dữ liệu thời tiết mới nhất"
             >
-              <span className={`text-[14px] ${isRefreshing ? "animate-spin" : ""}`}>🔄</span>
+              <span className={`text-[13px] ${isRefreshing ? "animate-spin" : ""}`}>🔄</span>
               <span className="hidden sm:inline">{isRefreshing ? "Đang tải..." : "Cập nhật"}</span>
             </button>
           )}
@@ -1701,7 +1975,8 @@ export function MobileLayout({
   onOpenCopilot: (action: string | null) => void;
   onSelectArticle?: (article: NewsArticle) => void;
   geoStatus?: "idle" | "loading" | "granted" | "denied";
-  onRequestGeo?: () => void;
+  geoSource?: GeoSource;
+  onOpenLocationModal?: () => void;
   onRefresh?: () => void;
   isRefreshing?: boolean;
 }) {
@@ -1731,7 +2006,7 @@ export function MobileLayout({
         {/* Weather section */}
         <div className="flex flex-col gap-3 items-start w-full">
           <p className="font-['Inter:Semi_Bold'] font-semibold leading-[26px] text-[#182033] text-[20px]">Thời tiết</p>
-          <WeatherColumn data={data} onOpenCopilot={onOpenCopilot} geoStatus={geoStatus} onRequestGeo={onRequestGeo} onRefresh={onRefresh} isRefreshing={isRefreshing} />
+          <WeatherColumn data={data} onOpenCopilot={onOpenCopilot} geoStatus={geoStatus} geoSource={geoSource} onOpenLocationModal={onOpenLocationModal} onRefresh={onRefresh} isRefreshing={isRefreshing} />
         </div>
 
         {/* Video Hub Section */}
@@ -1833,7 +2108,8 @@ export function TabletLayout({
   onOpenCopilot: (action: string | null) => void;
   onSelectArticle?: (article: NewsArticle) => void;
   geoStatus?: "idle" | "loading" | "granted" | "denied";
-  onRequestGeo?: () => void;
+  geoSource?: GeoSource;
+  onOpenLocationModal?: () => void;
   onRefresh?: () => void;
   isRefreshing?: boolean;
 }) {
@@ -1871,7 +2147,7 @@ export function TabletLayout({
         <div className="flex gap-5 items-start w-full">
           {/* Weather column */}
           <div className="flex flex-col gap-3 items-start shrink-0 w-[calc(50%-10px)] max-w-[560px]">
-            <WeatherColumn data={data} onOpenCopilot={onOpenCopilot} geoStatus={geoStatus} onRequestGeo={onRequestGeo} onRefresh={onRefresh} isRefreshing={isRefreshing} />
+            <WeatherColumn data={data} onOpenCopilot={onOpenCopilot} geoStatus={geoStatus} geoSource={geoSource} onOpenLocationModal={onOpenLocationModal} onRefresh={onRefresh} isRefreshing={isRefreshing} />
           </div>
 
           {/* News column */}
@@ -1977,7 +2253,8 @@ export function DesktopLayout({
   onSearchChange?: (q: string) => void;
   onStartVisualTest?: () => void;
   geoStatus?: "idle" | "loading" | "granted" | "denied";
-  onRequestGeo?: () => void;
+  geoSource?: GeoSource;
+  onOpenLocationModal?: () => void;
   onRefresh?: () => void;
   isRefreshing?: boolean;
 }) {
@@ -2083,7 +2360,7 @@ export function DesktopLayout({
       <div className="flex gap-6 items-start p-6 w-full">
         {/* Left Column (Weather) */}
         <div className="flex flex-col gap-4 items-start shrink-0 w-[420px]">
-          <WeatherColumn data={data} onOpenCopilot={onOpenCopilot} geoStatus={geoStatus} onRequestGeo={onRequestGeo} onRefresh={onRefresh} isRefreshing={isRefreshing} />
+          <WeatherColumn data={data} onOpenCopilot={onOpenCopilot} geoStatus={geoStatus} geoSource={geoSource} onOpenLocationModal={onOpenLocationModal} onRefresh={onRefresh} isRefreshing={isRefreshing} />
         </div>
 
         {/* Right Column (News + Videos Hub) */}
@@ -2311,23 +2588,10 @@ export default function App() {
   const [copilotOpen, setCopilotOpen] = useState(false);
   const [activeAction, setActiveAction] = useState<string | null>(null);
   const [visualTestOpen, setVisualTestOpen] = useState(false);
+  const [locationModalOpen, setLocationModalOpen] = useState(false);
   const refreshRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      if (params.get("test") === "true" || params.get("autotest") === "true") {
-        setVisualTestOpen(true);
-      }
-    }
-  }, []);
-
-  const handleOpenCopilot = useCallback((action: string | null = null) => {
-    setActiveAction(action);
-    setCopilotOpen(true);
-  }, []);
-
-  const [geo, requestGeo] = useGeoLocation();
+  const { geo, requestGPS, requestIP, setManualLocation } = useGeoLocation();
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const loadData = useCallback(async (silent = false) => {
@@ -2462,7 +2726,8 @@ export default function App() {
           onOpenCopilot={handleOpenCopilot}
           onSelectArticle={setActiveArticle}
           geoStatus={geo.status}
-          onRequestGeo={requestGeo}
+          geoSource={geo.source}
+          onOpenLocationModal={() => setLocationModalOpen(true)}
           onRefresh={() => loadData(true)}
           isRefreshing={isRefreshing}
         />
@@ -2474,7 +2739,8 @@ export default function App() {
           onOpenCopilot={handleOpenCopilot}
           onSelectArticle={setActiveArticle}
           geoStatus={geo.status}
-          onRequestGeo={requestGeo}
+          geoSource={geo.source}
+          onOpenLocationModal={() => setLocationModalOpen(true)}
           onRefresh={() => loadData(true)}
           isRefreshing={isRefreshing}
         />
@@ -2489,11 +2755,24 @@ export default function App() {
           onSearchChange={setSearchQuery}
           onStartVisualTest={() => setVisualTestOpen(true)}
           geoStatus={geo.status}
-          onRequestGeo={requestGeo}
+          geoSource={geo.source}
+          onOpenLocationModal={() => setLocationModalOpen(true)}
           onRefresh={() => loadData(true)}
           isRefreshing={isRefreshing}
         />
       </div>
+
+            {/* Location Picker Modal */}
+      <LocationPickerModal
+        isOpen={locationModalOpen}
+        onClose={() => setLocationModalOpen(false)}
+        currentLocation={data.location}
+        onSelectLocation={setManualLocation}
+        onAutoGPS={requestGPS}
+        onAutoIP={requestIP}
+        geoSource={geo.source}
+        loading={geo.status === "loading"}
+      />
 
       {/* Floating Antigravity Copilot Launcher Button */}
       <button
