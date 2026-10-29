@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Redirecting...</title>
+    <script>
+        var path = window.location.pathname.toLowerCase();
+        if (path.includes('admin')) {
+            window.location.replace('/admin_board.html' + window.location.search);
+        } else {
+            window.location.replace('/' + window.location.search);
+        }
+    </script>
+</head>
+<body>
+    <p>Đang chuyển hướng đến Bảng Quản Trị...</p>
+</body>
+</html>

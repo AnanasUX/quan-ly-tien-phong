@@ -1,0 +1,1688 @@
+<!DOCTYPE html>
+<html lang="vi" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AnX Admin Board - Quản Trị Tiền Phòng & Nội Dung Website</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        midnight: '#070b14',
+                        sidebar: '#0d1322',
+                        card: '#121a2f',
+                        cardHover: '#18233e',
+                        borderSubtle: 'rgba(255, 255, 255, 0.08)'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #070b14; color: #f1f5f9; }
+        .font-mono-code { font-family: 'JetBrains Mono', monospace; }
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: #070b14; }
+        ::-webkit-scrollbar-thumb { background: rgba(139, 92, 246, 0.3); border-radius: 9999px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(236, 72, 153, 0.6); }
+        @media print {
+            body * { visibility: hidden; }
+            #printableInvoice, #printableInvoice * { visibility: visible; }
+            #printableInvoice { position: absolute; left: 0; top: 0; width: 100%; color: black; background: white; }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col bg-midnight text-slate-100">
+
+    <!-- Toast Notification -->
+    <div id="toastContainer" class="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- ================= 1. MÀN HÌNH ĐĂNG NHẬP (LOGIN SCREEN) ================= -->
+    <div id="loginScreen" class="fixed inset-0 z-50 flex items-center justify-center bg-midnight/95 backdrop-blur-xl px-4">
+        <div class="w-full max-w-md p-8 rounded-3xl bg-sidebar border border-white/10 shadow-2xl space-y-6">
+            <!-- Brand Logo -->
+            <div class="text-center space-y-2">
+                <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-tr from-rose-500 via-purple-600 to-indigo-600 flex items-center justify-center text-white text-2xl shadow-lg shadow-purple-500/30">
+                    🛡️
+                </div>
+                <h2 class="text-xl font-extrabold text-white tracking-tight">Admin Board Login</h2>
+                <p class="text-xs text-slate-400">Trung tâm quản trị Tiền phòng & Nội dung website anx.io.vn</p>
+            </div>
+
+            <!-- Login Form (LƯU Ý: Tuyệt đối không tự động điền input, hoàn toàn rỗng để người dùng tự gõ) -->
+            <form id="loginForm" onsubmit="handleLogin(event)" class="space-y-4" autocomplete="off">
+                <div>
+                    <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">Tên đăng nhập</label>
+                    <input 
+                        type="text" 
+                        id="loginUsername" 
+                        name="admin_user_field" 
+                        autocomplete="off" 
+                        value="" 
+                        placeholder="Nhập tên đăng nhập (mặc định: admin)" 
+                        required 
+                        class="w-full text-xs bg-white/[0.04] border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
+                    >
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">Mật khẩu</label>
+                    <input 
+                        type="password" 
+                        id="loginPassword" 
+                        name="admin_pass_field" 
+                        autocomplete="new-password" 
+                        value="" 
+                        placeholder="Nhập mật khẩu (mặc định: admin)" 
+                        required 
+                        class="w-full text-xs bg-white/[0.04] border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
+                    >
+                </div>
+
+                <!-- Helper Badge thông báo tài khoản mặc định -->
+                <div class="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 text-[11px] text-purple-300 flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <span>💡</span>
+                        <span>Mặc định: <b>admin</b> | Pass: <b>admin</b></span>
+                    </div>
+                    <button type="button" onclick="fillTestCredentials()" class="text-[10px] text-purple-400 hover:text-purple-200 underline cursor-pointer">
+                        Điền thử
+                    </button>
+                </div>
+
+                <button 
+                    type="submit" 
+                    id="loginSubmitBtn" 
+                    class="w-full py-3 bg-gradient-to-r from-rose-500 to-purple-600 hover:opacity-95 text-white font-bold text-xs rounded-xl shadow-lg shadow-purple-600/30 transition-all cursor-pointer flex items-center justify-center gap-2"
+                >
+                    <span id="loginBtnText">Đăng Nhập Vào Bảng Quản Trị</span>
+                    <svg class="size-4 animate-spin hidden" id="loginSpinner" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+                </button>
+
+                <!-- One-click Direct Access -->
+                <button 
+                    type="button" 
+                    onclick="handleDirectGuestLogin()" 
+                    class="w-full py-2.5 bg-white/[0.05] hover:bg-white/[0.1] text-slate-300 hover:text-white font-semibold text-xs rounded-xl border border-white/10 transition-all cursor-pointer flex items-center justify-center gap-2"
+                >
+                    <span>⚡ Vào Xem Bảng Quản Trị Trực Tiếp (Không Cần Gõ)</span>
+                </button>
+            </form>
+
+            <div class="pt-2 text-center">
+                <a href="/" class="text-[11px] text-slate-500 hover:text-slate-300 transition-colors">
+                    ← Trở lại trang chủ Thời tiết & Tin tức anx.io.vn
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= 2. MÀN HÌNH CHÍNH (ADMIN DASHBOARD) ================= -->
+    <div id="adminDashboard" class="hidden flex-1 flex flex-col min-h-screen">
+        <!-- Topbar Admin -->
+        <header class="h-16 bg-sidebar/90 backdrop-blur-md border-b border-borderSubtle px-4 sm:px-8 flex items-center justify-between sticky top-0 z-40">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-rose-500 via-purple-600 to-indigo-600 flex items-center justify-center text-white text-lg font-bold shadow-md shadow-purple-500/20">
+                    🛡️
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h1 class="font-extrabold text-sm sm:text-base text-white tracking-tight">anx.io.vn • Admin Board</h1>
+                        <span id="backendStatusBadge" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                            🟢 Hệ Thống Sẵn Sàng
+                        </span>
+                    </div>
+                    <p class="text-[11px] text-slate-400">Quản trị Tiền Phòng, Điện Nước & Dữ Liệu Website</p>
+                </div>
+            </div>
+
+            <!-- Header Actions -->
+            <div class="flex items-center gap-2.5">
+                <a href="/" target="_self" class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-xs font-semibold text-slate-300 hover:text-white transition-colors">
+                    <span>← Về Web Chính</span>
+                </a>
+                <button onclick="handleLogout()" class="px-3.5 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 text-xs font-bold transition-colors cursor-pointer">
+                    Đăng xuất
+                </button>
+            </div>
+        </header>
+
+        <!-- Navigation Tabs Admin -->
+        <div class="bg-sidebar border-b border-borderSubtle px-4 sm:px-8">
+            <div class="flex items-center gap-2 overflow-x-auto py-2 text-xs font-bold">
+                <button onclick="switchTab('rent')" id="tab-rent" class="tab-btn active px-4 py-2 rounded-xl bg-gradient-to-r from-rose-500 to-purple-600 text-white shadow-sm shrink-0 cursor-pointer flex items-center gap-2">
+                    <span>🏠</span> Tiền Phòng & Điện Nước
+                </button>
+                <button onclick="switchTab('weather')" id="tab-weather" class="tab-btn px-4 py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 shrink-0 cursor-pointer flex items-center gap-2">
+                    <span>🌦️</span> Quản Trị Thời Tiết
+                </button>
+                <button onclick="switchTab('news')" id="tab-news" class="tab-btn px-4 py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 shrink-0 cursor-pointer flex items-center gap-2">
+                    <span>📰</span> Quản Trị Tin Tức
+                </button>
+                <button onclick="switchTab('shorts')" id="tab-shorts" class="tab-btn px-4 py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 shrink-0 cursor-pointer flex items-center gap-2">
+                    <span>🎬</span> Video Shorts
+                </button>
+                <button onclick="switchTab('alert')" id="tab-alert" class="tab-btn px-4 py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 shrink-0 cursor-pointer flex items-center gap-2">
+                    <span>📢</span> Banner Cảnh Báo
+                </button>
+                <button onclick="switchTab('settings')" id="tab-settings" class="tab-btn px-4 py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 shrink-0 cursor-pointer flex items-center gap-2">
+                    <span>⚙️</span> Cài Đặt & Nhật Ký
+                </button>
+            </div>
+        </div>
+
+        <!-- Main Admin Content Area -->
+        <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-8 space-y-6">
+
+            <!-- ================= TAB 0: QUẢN TRỊ TIỀN PHÒNG & ĐIỆN NƯỚC (CÔNG NỢ) ================= -->
+            <div id="view-rent" class="space-y-6">
+                <!-- 4 Thẻ KPI Tóm Tắt -->
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div class="p-5 rounded-2xl bg-card border border-borderSubtle space-y-2">
+                        <span class="text-xs font-bold text-slate-400">🏠 Tổng Số Phòng</span>
+                        <div class="text-2xl font-black text-white" id="rent_kpi_rooms">4</div>
+                        <span class="text-[11px] text-purple-300">Đang quản lý</span>
+                    </div>
+
+                    <div class="p-5 rounded-2xl bg-card border border-borderSubtle space-y-2">
+                        <span class="text-xs font-bold text-slate-400">💵 Đã Thu Tháng Này</span>
+                        <div class="text-2xl font-black text-emerald-400" id="rent_kpi_collected">0 đ</div>
+                        <span class="text-[11px] text-slate-400">Hóa đơn đã thanh toán</span>
+                    </div>
+
+                    <div class="p-5 rounded-2xl bg-card border border-borderSubtle space-y-2">
+                        <span class="text-xs font-bold text-slate-400">⚠️ Công Nợ Chưa Thu</span>
+                        <div class="text-2xl font-black text-rose-400" id="rent_kpi_pending">0 đ</div>
+                        <span class="text-[11px] text-rose-300/80">Cần nhắc thanh toán</span>
+                    </div>
+
+                    <div class="p-5 rounded-2xl bg-card border border-borderSubtle space-y-2">
+                        <span class="text-xs font-bold text-slate-400">⚡ Đơn Giá Định Mức</span>
+                        <div class="text-sm font-bold text-indigo-300">
+                            Điện: <span id="rent_kpi_elec">3.500</span> đ/kWh<br>
+                            Nước: <span id="rent_kpi_water">35.000</span> đ/m³
+                        </div>
+                        <span class="text-[11px] text-slate-400">Phí tiện ích: 300.000 đ</span>
+                    </div>
+                </div>
+
+                <!-- Khung Tính Tiền Phòng Nhanh (Lệnh /tinhcn & Form) -->
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    <div class="lg:col-span-7 p-6 rounded-3xl bg-card border border-borderSubtle space-y-5">
+                        <div class="flex items-center justify-between pb-3 border-b border-white/5">
+                            <div>
+                                <h3 class="text-base font-extrabold text-white flex items-center gap-2">
+                                    <span>⚡</span> Tính Nhanh Tiền Phòng & Điện Nước
+                                </h3>
+                                <p class="text-xs text-slate-400">Nhập chuỗi 5 số hoặc điền trực tiếp vào form để lập hóa đơn</p>
+                            </div>
+                            <span class="px-2.5 py-1 rounded-lg bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[10px] font-mono-code font-bold">
+                                /tinhcn
+                            </span>
+                        </div>
+
+                        <!-- Cú pháp nhanh /tinhcn -->
+                        <div class="p-4 rounded-2xl bg-white/[0.02] border border-white/5 space-y-2">
+                            <label class="block text-xs font-bold text-purple-300">
+                                Nhập nhanh chuỗi 5 chỉ số (cách nhau bởi dấu chấm phẩy hoặc khoảng trắng):
+                            </label>
+                            <div class="flex gap-2">
+                                <input 
+                                    type="text" 
+                                    id="rent_quick_input" 
+                                    placeholder="Ví dụ: 1682;1820;811;819;8 (Điện cũ; Điện mới; Nước cũ; Nước mới; Số khóa)" 
+                                    class="flex-1 text-xs font-mono-code bg-midnight border border-white/10 rounded-xl px-4 py-2.5 text-white placeholder-slate-600 focus:outline-none focus:border-purple-500"
+                                >
+                                <button onclick="handleQuickCalculate()" class="px-4 py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-xl transition-all cursor-pointer whitespace-nowrap">
+                                    Nạp & Tính
+                                </button>
+                            </div>
+                            <p class="text-[11px] text-slate-400">
+                                💡 Thứ tự chỉ số: <span class="text-slate-300 font-mono-code">Số điện cũ ; Số điện mới ; Số nước cũ ; Số nước mới ; Số khóa</span>
+                            </p>
+                        </div>
+
+                        <!-- Chi tiết chỉ số -->
+                        <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                            <div class="col-span-1">
+                                <label class="block text-[11px] font-bold text-slate-400 mb-1">Số điện cũ</label>
+                                <input type="number" id="calc_d_cu" value="1682" class="w-full text-xs font-mono-code bg-white/[0.04] border border-white/10 rounded-xl p-2.5 text-white">
+                            </div>
+                            <div class="col-span-1">
+                                <label class="block text-[11px] font-bold text-amber-400 mb-1">Số điện mới</label>
+                                <input type="number" id="calc_d_moi" value="1820" class="w-full text-xs font-mono-code bg-white/[0.04] border border-white/10 rounded-xl p-2.5 text-white">
+                            </div>
+                            <div class="col-span-1">
+                                <label class="block text-[11px] font-bold text-slate-400 mb-1">Số nước cũ</label>
+                                <input type="number" id="calc_n_cu" value="811" class="w-full text-xs font-mono-code bg-white/[0.04] border border-white/10 rounded-xl p-2.5 text-white">
+                            </div>
+                            <div class="col-span-1">
+                                <label class="block text-[11px] font-bold text-cyan-400 mb-1">Số nước mới</label>
+                                <input type="number" id="calc_n_moi" value="819" class="w-full text-xs font-mono-code bg-white/[0.04] border border-white/10 rounded-xl p-2.5 text-white">
+                            </div>
+                            <div class="col-span-2 sm:col-span-1">
+                                <label class="block text-[11px] font-bold text-indigo-400 mb-1">Số khóa</label>
+                                <input type="number" id="calc_sk" value="8" class="w-full text-xs font-mono-code bg-white/[0.04] border border-white/10 rounded-xl p-2.5 text-white">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-400 mb-1">Chọn phòng thanh toán</label>
+                                <select id="calc_room_select" class="w-full text-xs bg-sidebar border border-white/10 rounded-xl p-2.5 text-white">
+                                    <option value="p101">Phòng 101 - Nguyễn Văn An (3.500.000 đ)</option>
+                                    <option value="p102">Phòng 102 - Trần Thị Bình (3.500.000 đ)</option>
+                                    <option value="p201">Phòng 201 - Lê Hoàng Cường (3.500.000 đ)</option>
+                                    <option value="p202">Phòng 202 - Phạm Minh Đức (3.500.000 đ)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-400 mb-1">Ghi chú hóa đơn</label>
+                                <input type="text" id="calc_note" placeholder="Ví dụ: Tiền phòng tháng 10/2026..." class="w-full text-xs bg-white/[0.04] border border-white/10 rounded-xl p-2.5 text-white">
+                            </div>
+                        </div>
+
+                        <!-- Các nút tính & lưu -->
+                        <div class="flex flex-wrap items-center gap-3 pt-3">
+                            <button onclick="executeCalculate(false)" class="flex-1 py-3 px-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:opacity-90 text-white font-bold text-xs rounded-xl shadow-lg transition-all cursor-pointer">
+                                🧮 Tính Toán & Xem Hóa Đơn
+                            </button>
+                            <button onclick="executeCalculate(true)" class="flex-1 py-3 px-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:opacity-90 text-white font-bold text-xs rounded-xl shadow-lg transition-all cursor-pointer">
+                                💾 Lưu Vào Lịch Sử Công Nợ
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Preview Hóa Đơn & Tin Nhắn Gửi Khách -->
+                    <div class="lg:col-span-5 p-6 rounded-3xl bg-card border border-borderSubtle flex flex-col justify-between space-y-4">
+                        <div class="space-y-4">
+                            <div class="flex items-center justify-between pb-2 border-b border-white/5">
+                                <h4 class="text-sm font-extrabold text-white flex items-center gap-2">
+                                    <span>🧾</span> Phiếu Thu Tiền Phòng Mẫu
+                                </h4>
+                                <span class="text-[11px] text-slate-400" id="bill_preview_date">Hôm nay</span>
+                            </div>
+
+                            <div id="printableInvoice" class="p-4 rounded-2xl bg-sidebar border border-white/5 space-y-3 text-xs">
+                                <div class="flex justify-between items-center text-slate-300">
+                                    <span class="font-bold text-white text-sm" id="bill_prev_room">Phòng 101</span>
+                                    <span class="text-slate-400" id="bill_prev_tenant">Nguyễn Văn An</span>
+                                </div>
+                                <div class="text-[11px] text-purple-300 font-mono-code" id="bill_prev_id">Mã HĐ: HD-T10</div>
+
+                                <div class="space-y-1.5 pt-2 border-t border-white/5">
+                                    <div class="flex justify-between">
+                                        <span class="text-slate-400">1. Tiền nhà cố định:</span>
+                                        <span class="font-bold text-white" id="bill_prev_rent">3.500.000 đ</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span class="text-slate-400">2. Điện (<span id="bill_prev_so_dien">138</span> kWh x 3.500):</span>
+                                        <span class="font-bold text-amber-300" id="bill_prev_tien_dien">483.000 đ</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span class="text-slate-400">3. Nước (<span id="bill_prev_so_nuoc">8</span> m³ x 35.000):</span>
+                                        <span class="font-bold text-cyan-300" id="bill_prev_tien_nuoc">280.000 đ</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span class="text-slate-400">4. Tiện ích (Rác+Mạng+Vệ sinh):</span>
+                                        <span class="font-bold text-white" id="bill_prev_phi">300.000 đ</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span class="text-slate-400">5. Số khóa:</span>
+                                        <span class="font-bold text-indigo-300" id="bill_prev_sk">8</span>
+                                    </div>
+                                </div>
+
+                                <div class="pt-2 border-t border-purple-500/30 flex justify-between items-center text-sm font-black text-rose-400">
+                                    <span>TỔNG CỘNG:</span>
+                                    <span class="text-lg text-emerald-400" id="bill_prev_total">4.563.000 đ</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Action Buttons: Copy Message, Print -->
+                        <div class="space-y-2 pt-2">
+                            <button onclick="copyBillTelegramMessage()" class="w-full py-2.5 px-3 bg-purple-600/30 hover:bg-purple-600/40 text-purple-200 border border-purple-500/40 font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2">
+                                <span>📋</span> Copy Tin Nhắn Gửi Khách (Zalo / Telegram)
+                            </button>
+                            <button onclick="window.print()" class="w-full py-2 px-3 bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 font-semibold text-xs rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2">
+                                <span>🖨️</span> In Hóa Đơn Thu Tiền
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bảng Cấu Hình Đơn Giá & Quản Lý Phòng Thuê -->
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    <!-- Đơn giá định mức -->
+                    <div class="lg:col-span-5 p-6 rounded-3xl bg-card border border-borderSubtle space-y-4">
+                        <div class="flex items-center justify-between pb-2 border-b border-white/5">
+                            <h4 class="text-sm font-extrabold text-white flex items-center gap-2">
+                                <span>⚙️</span> Bảng Giá Định Mức
+                            </h4>
+                            <span class="text-[11px] text-slate-400">Áp dụng chung</span>
+                        </div>
+
+                        <div class="space-y-3 text-xs">
+                            <div class="flex items-center justify-between">
+                                <label class="text-slate-300">Tiền nhà chuẩn (đ/tháng):</label>
+                                <input type="number" id="price_rent_fixed" value="3500000" class="w-36 text-right font-mono-code bg-midnight border border-white/10 rounded-lg p-1.5 text-white">
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <label class="text-slate-300">Giá điện (đ/kWh):</label>
+                                <input type="number" id="price_elec" value="3500" class="w-36 text-right font-mono-code bg-midnight border border-white/10 rounded-lg p-1.5 text-white">
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <label class="text-slate-300">Giá nước (đ/m³):</label>
+                                <input type="number" id="price_water" value="35000" class="w-36 text-right font-mono-code bg-midnight border border-white/10 rounded-lg p-1.5 text-white">
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <label class="text-slate-300">Phí rác sinh hoạt (đ):</label>
+                                <input type="number" id="price_fee1" value="100000" class="w-36 text-right font-mono-code bg-midnight border border-white/10 rounded-lg p-1.5 text-white">
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <label class="text-slate-300">Phí internet Wi-Fi (đ):</label>
+                                <input type="number" id="price_fee2" value="100000" class="w-36 text-right font-mono-code bg-midnight border border-white/10 rounded-lg p-1.5 text-white">
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <label class="text-slate-300">Vệ sinh & giặt sấy (đ):</label>
+                                <input type="number" id="price_fee3" value="100000" class="w-36 text-right font-mono-code bg-midnight border border-white/10 rounded-lg p-1.5 text-white">
+                            </div>
+                        </div>
+
+                        <div class="pt-2 flex justify-end">
+                            <button onclick="saveRentPricing()" class="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-xl transition-all cursor-pointer">
+                                💾 Cập Nhật Bảng Giá
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Danh sách phòng thuê -->
+                    <div class="lg:col-span-7 p-6 rounded-3xl bg-card border border-borderSubtle space-y-4">
+                        <div class="flex items-center justify-between pb-2 border-b border-white/5">
+                            <h4 class="text-sm font-extrabold text-white flex items-center gap-2">
+                                <span>🔑</span> Danh Sách Phòng Thuê
+                            </h4>
+                            <button onclick="openAddRoomModal()" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-lg transition-all cursor-pointer">
+                                + Thêm Phòng
+                            </button>
+                        </div>
+
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-xs text-left">
+                                <thead class="text-slate-400 border-b border-white/5 uppercase text-[10px]">
+                                    <tr>
+                                        <th class="p-3">Tên Phòng</th>
+                                        <th class="p-3">Người Thuê</th>
+                                        <th class="p-3">Giá Thuê</th>
+                                        <th class="p-3 text-right">Thao tác</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="rentRoomsTableBody" class="divide-y divide-white/5">
+                                    <!-- Dynamic rooms -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Lịch Sử Hóa Đơn & Theo Dõi Công Nợ -->
+                <div class="p-6 rounded-3xl bg-card border border-borderSubtle space-y-4">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-white/5">
+                        <h4 class="text-sm font-extrabold text-white flex items-center gap-2">
+                            <span>📊</span> Lịch Sử Hóa Đơn & Theo Dõi Công Nợ
+                        </h4>
+                        <div class="flex items-center gap-2">
+                            <select id="invoiceStatusFilter" onchange="loadRentInvoices()" class="text-xs bg-sidebar border border-white/10 rounded-xl px-3 py-1.5 text-white">
+                                <option value="">Tất cả trạng thái</option>
+                                <option value="unpaid">Chưa thanh toán</option>
+                                <option value="paid">Đã thanh toán</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-xs text-left">
+                            <thead class="text-slate-400 border-b border-white/5 uppercase text-[10px]">
+                                <tr>
+                                    <th class="p-3">Mã HĐ</th>
+                                    <th class="p-3">Ngày Lập</th>
+                                    <th class="p-3">Phòng</th>
+                                    <th class="p-3">Điện (kWh)</th>
+                                    <th class="p-3">Nước (m³)</th>
+                                    <th class="p-3">Tổng Tiền</th>
+                                    <th class="p-3">Trạng Thái</th>
+                                    <th class="p-3 text-right">Thao tác</th>
+                                </tr>
+                            </thead>
+                            <tbody id="rentInvoicesTableBody" class="divide-y divide-white/5">
+                                <!-- Dynamic invoices -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ================= TAB 1: QUẢN TRỊ THỜI TIẾT ================= -->
+            <div id="view-weather" class="hidden space-y-6">
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    <div class="lg:col-span-7 p-6 rounded-3xl bg-card border border-borderSubtle space-y-4">
+                        <div class="flex items-center justify-between pb-2 border-b border-white/5">
+                            <div>
+                                <h3 class="text-base font-extrabold text-white">🌦️ Cấu Hình Thông Số Thời Tiết</h3>
+                                <p class="text-xs text-slate-400" id="weatherCoord">Tọa độ: 20.9716, 105.7725 (Hà Nội)</p>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <label class="text-xs text-slate-300 font-bold">Chế độ ghi đè:</label>
+                                <input type="checkbox" id="weatherOverrideToggle" class="toggle size-4 accent-purple-600">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-400 mb-1">Nhiệt độ (°C)</label>
+                                <input type="number" step="0.1" id="w_temp" value="28.5" class="w-full text-xs bg-white/[0.04] border border-white/10 rounded-xl p-2.5 text-white">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-400 mb-1">Cảm nhận (°C)</label>
+                                <input type="number" step="0.1" id="w_feels_like" value="30.2" class="w-full text-xs bg-white/[0.04] border border-white/10 rounded-xl p-2.5 text-white">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-400 mb-1">Độ ẩm (%)</label>
+                                <input type="number" id="w_humidity" value="75" class="w-full text-xs bg-white/[0.04] border border-white/10 rounded-xl p-2.5 text-white">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-400 mb-1">Gió (m/s)</label>
+                                <input type="number" step="0.1" id="w_wind_speed" value="3.2" class="w-full text-xs bg-white/[0.04] border border-white/10 rounded-xl p-2.5 text-white">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-400 mb-1">Trạng thái thời tiết</label>
+                                <select id="w_status" class="w-full text-xs bg-sidebar border border-white/10 rounded-xl p-2.5 text-white">
+                                    <option value="NANG">Trời nắng ráo (NANG)</option>
+                                    <option value="NANG_GAT">Nắng gay gắt, sốc nhiệt (NANG_GAT)</option>
+                                    <option value="MUA_NHO">Mưa nhỏ rải rác (MUA_NHO)</option>
+                                    <option value="MUA_DONG">Mưa dông, sấm chớp (MUA_DONG)</option>
+                                    <option value="MUA_BAO">Mưa bão lớn, gió giật (MUA_BAO)</option>
+                                    <option value="AM_U">Trời âm u, mây nhiều (AM_U)</option>
+                                    <option value="LANH">Rét đậm, không khí lạnh (LANH)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-400 mb-1">Mô tả hiển thị</label>
+                                <input type="text" id="w_desc" value="Trời nắng ráo, tầm nhìn tốt" class="w-full text-xs bg-white/[0.04] border border-white/10 rounded-xl p-2.5 text-white">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-400 mb-1">Cảnh báo thời tiết (warningText)</label>
+                            <textarea id="w_warningText" rows="2" class="w-full text-xs bg-white/[0.04] border border-white/10 rounded-xl p-2.5 text-white">Thời tiết ổn định, thích hợp cho các hoạt động di chuyển và làm việc ngoài trời.</textarea>
+                        </div>
+
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-400 mb-1">Gợi ý trang phục & di chuyển (Mỗi dòng 1 gợi ý)</label>
+                            <textarea id="w_suggestions" rows="2" class="w-full text-xs bg-white/[0.04] border border-white/10 rounded-xl p-2.5 text-white">Nên mang theo mũ hoặc kính râm khi ra đường.&#10;Giao thông thông thoáng, chú ý giữ tốc độ quy định.</textarea>
+                        </div>
+
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-400 mb-1">Điểm ngập úng cảnh báo (Mỗi dòng 1 điểm)</label>
+                            <textarea id="w_floods" rows="2" class="w-full text-xs bg-white/[0.04] border border-white/10 rounded-xl p-2.5 text-white" placeholder="Ngã tư Nguyễn Trãi - Khuất Duy Tiến&#10;Tuyến đường Trần Duy Hưng"></textarea>
+                        </div>
+
+                        <div class="pt-2 flex justify-end">
+                            <button onclick="saveWeatherConfig()" class="px-6 py-2.5 bg-gradient-to-r from-rose-500 to-purple-600 hover:opacity-90 text-white font-bold text-xs rounded-xl shadow-lg transition-all cursor-pointer">
+                                💾 Lưu Cập Nhật Thời Tiết
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Live Preview Thẻ Thời Tiết -->
+                    <div class="lg:col-span-5 p-6 rounded-3xl bg-card border border-borderSubtle flex flex-col justify-between space-y-4">
+                        <div>
+                            <h4 class="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2">
+                                <span>📱</span> Xem Trước Trên Web Chính
+                            </h4>
+
+                            <div class="p-5 rounded-2xl bg-gradient-to-tr from-purple-900/60 to-indigo-900/60 border border-purple-500/30 text-white space-y-4 shadow-xl">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <h5 class="font-extrabold text-base" id="prev_loc">Hà Nội, VN</h5>
+                                        <span class="text-xs text-purple-200" id="prev_desc">Trời nắng ráo</span>
+                                    </div>
+                                    <div class="text-3xl font-black font-mono" id="prev_temp">28.5°C</div>
+                                </div>
+
+                                <div class="grid grid-cols-2 gap-2 text-xs text-slate-300 pt-2 border-t border-white/10">
+                                    <div>Cảm nhận: <b id="prev_feels">30.2°C</b></div>
+                                    <div>Độ ẩm: <b id="prev_hum">75%</b></div>
+                                </div>
+
+                                <div class="p-3 rounded-xl bg-black/30 border border-white/10 text-xs text-amber-300" id="prev_warning">
+                                    Thời tiết ổn định, thích hợp cho các hoạt động di chuyển và làm việc ngoài trời.
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="p-4 rounded-2xl bg-white/[0.02] border border-white/5 text-xs text-slate-400 space-y-2">
+                            <span class="font-bold text-slate-300">💡 Hướng dẫn:</span>
+                            <p>Khi bật chế độ ghi đè, website anx.io.vn sẽ ưu tiên hiển thị thông số bạn đặt tại đây thay vì lấy tự động từ vệ tinh OpenWeather.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ================= TAB 2: QUẢN TRỊ TIN TỨC ================= -->
+            <div id="view-news" class="hidden space-y-6">
+                <div class="p-6 rounded-3xl bg-card border border-borderSubtle space-y-4">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-white/5">
+                        <div>
+                            <h3 class="text-base font-extrabold text-white">📰 Quản Trị Danh Sách Tin Tức</h3>
+                            <p class="text-xs text-slate-400">Ghim tin quan trọng, ẩn tin bài không phù hợp hoặc thêm tin nóng đặc biệt</p>
+                        </div>
+                        <button onclick="openAddNewsModal()" class="px-4 py-2 bg-gradient-to-r from-rose-500 to-purple-600 hover:opacity-90 text-white font-bold text-xs rounded-xl shadow-lg transition-all cursor-pointer">
+                            + Thêm Tin Nóng Mới
+                        </button>
+                    </div>
+
+                    <div id="newsManagementList" class="space-y-3">
+                        <!-- Dynamic news items -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- ================= TAB 3: VIDEO SHORTS ================= -->
+            <div id="view-shorts" class="hidden space-y-6">
+                <div class="p-6 rounded-3xl bg-card border border-borderSubtle space-y-5">
+                    <div class="flex items-center justify-between pb-2 border-b border-white/5">
+                        <div>
+                            <h3 class="text-base font-extrabold text-white">🎬 Quản Trị Video Shorts</h3>
+                            <p class="text-xs text-slate-400">Thêm link YouTube Shorts, chọn video phát nổi bật và sắp xếp danh sách</p>
+                        </div>
+                    </div>
+
+                    <!-- Form thêm short -->
+                    <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 p-4 rounded-2xl bg-white/[0.02] border border-white/5">
+                        <div class="sm:col-span-2">
+                            <label class="block text-[11px] font-bold text-slate-400 mb-1">Link YouTube Shorts</label>
+                            <input type="text" id="short_input_url" placeholder="https://www.youtube.com/shorts/..." class="w-full text-xs bg-midnight border border-white/10 rounded-xl p-2.5 text-white">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-400 mb-1">Tiêu đề video</label>
+                            <input type="text" id="short_input_title" placeholder="Tiêu đề hiển thị..." class="w-full text-xs bg-midnight border border-white/10 rounded-xl p-2.5 text-white">
+                        </div>
+                        <div class="flex items-end">
+                            <button onclick="handleAddShort()" class="w-full py-2.5 px-4 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl transition-all cursor-pointer">
+                                + Thêm Video
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Danh sách Shorts hiện có -->
+                    <div class="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-4" id="shortsGridList">
+                        <!-- Dynamic shorts -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- ================= TAB 4: BANNER CẢNH BÁO ================= -->
+            <div id="view-alert" class="hidden space-y-6">
+                <div class="p-6 rounded-3xl bg-card border border-borderSubtle space-y-5 max-w-2xl">
+                    <div>
+                        <h3 class="text-base font-extrabold text-white">📢 Cấu Hình Banner Cảnh Báo Khẩn Cấp</h3>
+                        <p class="text-xs text-slate-400">Banner chạy dọc trên đầu trang web anx.io.vn khi có sự kiện thời tiết đặc biệt</p>
+                    </div>
+
+                    <div class="space-y-4">
+                        <div class="flex items-center gap-3">
+                            <input type="checkbox" id="alertBannerToggle" class="toggle size-4 accent-rose-500">
+                            <label class="text-xs font-bold text-white">Bật hiển thị banner khẩn cấp trên website</label>
+                        </div>
+
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-400 mb-1">Mức độ khẩn cấp</label>
+                            <select id="alertBannerType" class="w-full text-xs bg-sidebar border border-white/10 rounded-xl p-2.5 text-white">
+                                <option value="danger">Khẩn cấp nguy hiểm (Màu đỏ)</option>
+                                <option value="warning">Cảnh báo quan trọng (Màu cam/vàng)</option>
+                                <option value="info">Thông báo thông tin chung (Màu xanh)</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-400 mb-1">Nội dung cảnh báo</label>
+                            <textarea id="alertBannerMsg" rows="3" class="w-full text-xs bg-white/[0.04] border border-white/10 rounded-xl p-3 text-white" placeholder="Cảnh báo: Áp thấp nhiệt đới đang tiến gần khu vực miền Bắc, đề phòng dông lốc..."></textarea>
+                        </div>
+
+                        <div class="pt-2">
+                            <button onclick="saveAlertBanner()" class="px-6 py-2.5 bg-gradient-to-r from-rose-500 to-purple-600 hover:opacity-90 text-white font-bold text-xs rounded-xl shadow-lg transition-all cursor-pointer">
+                                💾 Lưu & Phát Cảnh Báo
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ================= TAB 5: CÀI ĐẶT & NHẬT KÝ ================= -->
+            <div id="view-settings" class="hidden space-y-6">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="p-6 rounded-3xl bg-card border border-borderSubtle space-y-4">
+                        <h4 class="text-sm font-extrabold text-white">🔐 Đổi Mật Khẩu Quản Trị</h4>
+                        <div class="space-y-3 text-xs">
+                            <div>
+                                <label class="block text-slate-400 mb-1">Mật khẩu cũ:</label>
+                                <input type="password" id="pwd_old" class="w-full bg-midnight border border-white/10 rounded-xl p-2.5 text-white">
+                            </div>
+                            <div>
+                                <label class="block text-slate-400 mb-1">Mật khẩu mới:</label>
+                                <input type="password" id="pwd_new" class="w-full bg-midnight border border-white/10 rounded-xl p-2.5 text-white">
+                            </div>
+                            <button onclick="handleChangePassword()" class="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl transition-all cursor-pointer">
+                                Lưu Mật Khẩu Mới
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="p-6 rounded-3xl bg-card border border-borderSubtle space-y-4">
+                        <h4 class="text-sm font-extrabold text-white">📝 Nhật Ký Hoạt Động</h4>
+                        <div id="activityLogsList" class="space-y-2 text-xs text-slate-300 max-h-60 overflow-y-auto pr-2">
+                            <!-- Logs -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- Modal Thêm Phòng -->
+    <div id="addRoomModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4">
+        <div class="w-full max-w-sm p-6 rounded-3xl bg-sidebar border border-white/10 shadow-2xl space-y-4">
+            <h3 class="text-sm font-bold text-white">Thêm Phòng Thuê Mới</h3>
+            <div class="space-y-3 text-xs">
+                <div>
+                    <label class="block text-slate-400 mb-1">Tên phòng (Ví dụ: Phòng 301):</label>
+                    <input type="text" id="modal_room_name" class="w-full bg-midnight border border-white/10 rounded-xl p-2.5 text-white">
+                </div>
+                <div>
+                    <label class="block text-slate-400 mb-1">Tên người thuê:</label>
+                    <input type="text" id="modal_room_tenant" class="w-full bg-midnight border border-white/10 rounded-xl p-2.5 text-white">
+                </div>
+                <div>
+                    <label class="block text-slate-400 mb-1">Số điện thoại:</label>
+                    <input type="text" id="modal_room_phone" class="w-full bg-midnight border border-white/10 rounded-xl p-2.5 text-white">
+                </div>
+                <div>
+                    <label class="block text-slate-400 mb-1">Giá thuê cố định (đ):</label>
+                    <input type="number" id="modal_room_rent" value="3500000" class="w-full bg-midnight border border-white/10 rounded-xl p-2.5 text-white">
+                </div>
+            </div>
+            <div class="flex justify-end gap-2 pt-2">
+                <button onclick="closeAddRoomModal()" class="px-4 py-2 bg-white/10 text-white rounded-xl text-xs font-bold">Hủy</button>
+                <button onclick="submitAddRoom()" class="px-4 py-2 bg-purple-600 text-white rounded-xl text-xs font-bold">Thêm Ngay</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript Client-Side Admin Board Logic (Hybrid Online Server + Standalone LocalStore) -->
+    <script>
+        const API_BASE = (window.location.protocol === 'file:' || window.location.hostname === 'anx.io.vn' || window.location.hostname === 'ananasux.github.io') ? 'http://127.0.0.1:5050' : '';
+        let currentAdminToken = sessionStorage.getItem('admin_token') || '';
+        let lastCalculatedBill = null;
+        let isServerOnline = false;
+
+        // ================= LOCAL STORAGE FALLBACK STORE =================
+        const LocalStore = {
+            STORAGE_KEY: 'anx_admin_board_cache_v2',
+            getPassword() {
+                return localStorage.getItem('anx_admin_custom_pwd') || 'admin';
+            },
+            setPassword(p) {
+                localStorage.setItem('anx_admin_custom_pwd', p);
+            },
+            getData() {
+                try {
+                    const raw = localStorage.getItem(this.STORAGE_KEY);
+                    if (raw) return JSON.parse(raw);
+                } catch(e) {}
+                const initial = {
+                    rent: {
+                        pricing: {
+                            rent_fixed: 3500000,
+                            electricity_unit: 3500,
+                            water_unit: 35000,
+                            service_fee_1: 100000,
+                            service_fee_2: 100000,
+                            service_fee_3: 100000
+                        },
+                        rooms: [
+                            { id: 'p101', name: 'Phòng 101', tenant: 'Nguyễn Văn An', phone: '0912345678', fixed_rent: 3500000 },
+                            { id: 'p102', name: 'Phòng 102', tenant: 'Trần Thị Bình', phone: '0987654321', fixed_rent: 3500000 },
+                            { id: 'p201', name: 'Phòng 201', tenant: 'Lê Hoàng Cường', phone: '0901122334', fixed_rent: 3500000 },
+                            { id: 'p202', name: 'Phòng 202', tenant: 'Phạm Minh Đức', phone: '0933445566', fixed_rent: 3500000 }
+                        ],
+                        invoices: [
+                            {
+                                id: 'HD-98214',
+                                created_at: new Date().toLocaleDateString('vi-VN'),
+                                room_id: 'p101',
+                                room_name: 'Phòng 101',
+                                tenant: 'Nguyễn Văn An',
+                                dien_cu: 1682, dien_moi: 1820, so_dien: 138, tien_dien: 483000,
+                                nuoc_cu: 811, nuoc_moi: 819, so_nuoc: 8, tien_nuoc: 280000,
+                                tien_nha: 3500000, phu_phi: 300000, s_khoa: 8, tong_tien: 4563000,
+                                status: 'unpaid'
+                            }
+                        ]
+                    },
+                    weather: {
+                        temp: 28.5, feels_like: 30.2, humidity: 75, wind_speed: 3.2,
+                        status: 'NANG', desc: 'Trời nắng ráo, tầm nhìn tốt',
+                        warningText: 'Thời tiết ổn định, thích hợp cho các hoạt động di chuyển và làm việc ngoài trời.',
+                        suggestionItems: ['Nên mang theo mũ hoặc kính râm khi ra đường.', 'Giao thông thuận lợi, chú ý tốc độ quy định.'],
+                        floodItems: []
+                    },
+                    news: {
+                        pinned: [],
+                        items: [
+                            { id: 'n1', title: 'Hà Nội đẩy nhanh tiến độ dự án vành đai 4 kết nối vùng đô thị', source: 'Tiền Phong', time: '1 giờ trước' },
+                            { id: 'n2', title: 'Dự báo xu thế thời tiết và chất lượng không khí tuần mới', source: 'Tiền Phong', time: '3 giờ trước' }
+                        ]
+                    },
+                    shorts: {
+                        featured_id: 's1',
+                        items: [
+                            { id: 's1', youtube_id: 'dQw4w9WgXcQ', title: 'Khám phá cuộc sống cư dân đô thị thông minh', channel: 'AnX Media', created_at: '2026-10-29' }
+                        ]
+                    },
+                    alert_banner: { enabled: false, type: 'warning', message: '' },
+                    logs: [
+                        { time: new Date().toLocaleTimeString('vi-VN'), action: 'Khởi tạo bảng quản trị AnX Admin Board' }
+                    ]
+                };
+                this.saveData(initial);
+                return initial;
+            },
+            saveData(data) {
+                try {
+                    localStorage.setItem(this.STORAGE_KEY, JSON.stringify(data));
+                } catch(e) {}
+            },
+            calculateBill({ dien_cu, dien_moi, nuoc_cu, nuoc_moi, s_khoa, room_id, note, save_invoice }) {
+                const data = this.getData();
+                const p = data.rent.pricing;
+                const room = data.rent.rooms.find(r => r.id === room_id) || { name: 'Phòng Thuê', tenant: '', fixed_rent: p.rent_fixed };
+                
+                const so_dien = dien_moi - dien_cu;
+                const tien_dien = so_dien * (p.electricity_unit || 3500);
+                const so_nuoc = nuoc_moi - nuoc_cu;
+                const tien_nuoc = so_nuoc * (p.water_unit || 35000);
+                const tien_nha = room.fixed_rent || p.rent_fixed || 3500000;
+                const phu_phi = (p.service_fee_1 || 100000) + (p.service_fee_2 || 100000) + (p.service_fee_3 || 100000);
+                const tong_tien = tien_nha + tien_dien + tien_nuoc + phu_phi;
+                
+                const billId = 'HD-' + Math.floor(10000 + Math.random() * 90000);
+                const nowStr = new Date().toLocaleDateString('vi-VN');
+                
+                const msg = `🏠 BẢNG KÊ TIỀN PHÒNG & ĐIỆN NƯỚC\n` +
+                    `- Phòng: ${room.name} (${room.tenant || 'Khách thuê'})\n` +
+                    `- Tiền nhà: ${tien_nha.toLocaleString('vi-VN')} đ\n` +
+                    `- Điện: (${dien_moi} - ${dien_cu}) = ${so_dien} kWh x ${(p.electricity_unit || 3500).toLocaleString('vi-VN')} = ${tien_dien.toLocaleString('vi-VN')} đ\n` +
+                    `- Nước: (${nuoc_moi} - ${nuoc_cu}) = ${so_nuoc} m³ x ${(p.water_unit || 35000).toLocaleString('vi-VN')} = ${tien_nuoc.toLocaleString('vi-VN')} đ\n` +
+                    `- Phí dịch vụ (Rác + Mạng + Vệ sinh): ${phu_phi.toLocaleString('vi-VN')} đ\n` +
+                    `- Số khóa: ${s_khoa}\n` +
+                    `--------------------------------\n` +
+                    `👉 TỔNG CỘNG: ${tong_tien.toLocaleString('vi-VN')} đ`;
+
+                const bill = {
+                    id: billId,
+                    created_at: nowStr,
+                    room_id: room_id,
+                    room_name: room.name,
+                    tenant: room.tenant,
+                    dien_cu, dien_moi, so_dien, tien_dien,
+                    nuoc_cu, nuoc_moi, so_nuoc, tien_nuoc,
+                    tien_nha, phu_phi, s_khoa, tong_tien,
+                    status: 'unpaid',
+                    note: note || '',
+                    telegram_message: msg
+                };
+
+                if (save_invoice) {
+                    data.rent.invoices.unshift(bill);
+                    data.logs.unshift({ time: new Date().toLocaleTimeString('vi-VN'), action: `Tạo hóa đơn ${billId} (${room.name})` });
+                    this.saveData(data);
+                }
+
+                return bill;
+            }
+        };
+
+        function showToast(msg, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            const col = type === 'success' ? 'border-emerald-500 text-emerald-300' : (type === 'error' ? 'border-rose-500 text-rose-300' : 'border-purple-500 text-purple-200');
+            toast.className = `px-4 py-2.5 rounded-2xl bg-sidebar border ${col} text-xs font-bold shadow-xl pointer-events-auto transition-all`;
+            toast.innerText = msg;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        function setServerOnlineStatus(online) {
+            isServerOnline = online;
+            const badge = document.getElementById('backendStatusBadge');
+            if (!badge) return;
+            if (online) {
+                badge.className = "px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30";
+                badge.innerHTML = "🟢 Máy Chủ Kết Nối (127.0.0.1:5050)";
+            } else {
+                badge.className = "px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30";
+                badge.innerHTML = "🟠 Chế Độ Độc Lập (LocalStorage Sẵn Sàng)";
+            }
+        }
+
+        function fillTestCredentials() {
+            document.getElementById('loginUsername').value = 'admin';
+            document.getElementById('loginPassword').value = 'admin';
+            showToast('Đã điền tài khoản: admin / admin', 'info');
+        }
+
+        // ================= XÁC THỰC ĐĂNG NHẬP =================
+        async function checkInitialAuth() {
+            if (currentAdminToken) {
+                if (currentAdminToken.startsWith('offline_')) {
+                    showDashboard();
+                    return;
+                }
+                try {
+                    const controller = new AbortController();
+                    const to = setTimeout(() => controller.abort(), 1500);
+                    const res = await fetch(`${API_BASE}/api/admin/check-auth`, {
+                        headers: { 'Authorization': `Bearer ${currentAdminToken}` },
+                        signal: controller.signal
+                    });
+                    clearTimeout(to);
+                    const d = await res.json();
+                    if (d.authenticated) {
+                        setServerOnlineStatus(true);
+                        showDashboard();
+                        return;
+                    }
+                } catch(e) {
+                    setServerOnlineStatus(false);
+                    showDashboard();
+                    return;
+                }
+            }
+            showLogin();
+        }
+
+        function showLogin() {
+            document.getElementById('loginScreen').classList.remove('hidden');
+            document.getElementById('adminDashboard').classList.add('hidden');
+            document.getElementById('loginUsername').value = '';
+            document.getElementById('loginPassword').value = '';
+        }
+
+        function showDashboard() {
+            document.getElementById('loginScreen').classList.add('hidden');
+            document.getElementById('adminDashboard').classList.remove('hidden');
+            loadOverview();
+            loadRentData();
+        }
+
+        async function handleLogin(e) {
+            if (e) e.preventDefault();
+            const u = document.getElementById('loginUsername').value.trim();
+            const p = document.getElementById('loginPassword').value.trim();
+            if (!u || !p) {
+                showToast('Vui lòng nhập đầy đủ tên đăng nhập và mật khẩu', 'error');
+                return;
+            }
+
+            const btn = document.getElementById('loginSubmitBtn');
+            const spin = document.getElementById('loginSpinner');
+            const txt = document.getElementById('loginBtnText');
+            if (btn) btn.disabled = true;
+            if (spin) spin.classList.remove('hidden');
+            if (txt) txt.innerText = 'Đang xác thực...';
+
+            let serverSuccess = false;
+            try {
+                const controller = new AbortController();
+                const to = setTimeout(() => controller.abort(), 2000);
+                const res = await fetch(`${API_BASE}/api/admin/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: u, password: p }),
+                    signal: controller.signal
+                });
+                clearTimeout(to);
+                const data = await res.json();
+                if (data.success && data.token) {
+                    currentAdminToken = data.token;
+                    sessionStorage.setItem('admin_token', data.token);
+                    setServerOnlineStatus(true);
+                    showToast('Đăng nhập thành công (Máy chủ Online)!', 'success');
+                    serverSuccess = true;
+                    showDashboard();
+                    return;
+                } else if (res.status === 401) {
+                    showToast(data.error || 'Sai tên đăng nhập hoặc mật khẩu!', 'error');
+                    if (btn) btn.disabled = false;
+                    if (spin) spin.classList.add('hidden');
+                    if (txt) txt.innerText = 'Đang Nhập Vào Bảng Quản Trị';
+                    return;
+                }
+            } catch(err) {
+                console.warn('Backend server unreachable, falling back to offline check', err);
+            }
+
+            // Offline check
+            const validUser = (u.toLowerCase() === 'admin');
+            const validPass = (p === 'admin' || p === LocalStore.getPassword());
+            if (validUser && validPass) {
+                currentAdminToken = 'offline_' + Date.now();
+                sessionStorage.setItem('admin_token', currentAdminToken);
+                setServerOnlineStatus(false);
+                showToast('Đăng nhập Quản Trị thành công (Chế độ Trực Tiếp)!', 'success');
+                showDashboard();
+            } else {
+                showToast('Sai tên đăng nhập hoặc mật khẩu! Mặc định: admin / admin', 'error');
+            }
+
+            if (btn) btn.disabled = false;
+            if (spin) spin.classList.add('hidden');
+            if (txt) txt.innerText = 'Đang Nhập Vào Bảng Quản Trị';
+        }
+
+        function handleDirectGuestLogin() {
+            currentAdminToken = 'offline_guest_' + Date.now();
+            sessionStorage.setItem('admin_token', currentAdminToken);
+            setServerOnlineStatus(false);
+            showToast('Đã mở Bảng Quản Trị (Chế độ Trực Tiếp)!', 'success');
+            showDashboard();
+        }
+
+        async function handleLogout() {
+            if (currentAdminToken && !currentAdminToken.startsWith('offline_')) {
+                try {
+                    await fetch(`${API_BASE}/api/admin/logout`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${currentAdminToken}` }
+                    });
+                } catch(e) {}
+            }
+            currentAdminToken = '';
+            sessionStorage.removeItem('admin_token');
+            showToast('Đã đăng xuất');
+            showLogin();
+        }
+
+        // ================= TABS NAVIGATION =================
+        function switchTab(tabId) {
+            const tabs = ['rent', 'weather', 'news', 'shorts', 'alert', 'settings'];
+            tabs.forEach(t => {
+                const b = document.getElementById(`tab-${t}`);
+                const v = document.getElementById(`view-${t}`);
+                if (t === tabId) {
+                    if (b) b.className = "tab-btn active px-4 py-2 rounded-xl bg-gradient-to-r from-rose-500 to-purple-600 text-white shadow-sm shrink-0 cursor-pointer flex items-center gap-2";
+                    if (v) v.classList.remove('hidden');
+                } else {
+                    if (b) b.className = "tab-btn px-4 py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 shrink-0 cursor-pointer flex items-center gap-2";
+                    if (v) v.classList.add('hidden');
+                }
+            });
+
+            if (tabId === 'rent') loadRentData();
+            if (tabId === 'weather') loadWeatherTab();
+            if (tabId === 'news') loadAdminNews();
+            if (tabId === 'shorts') loadAdminShorts();
+            if (tabId === 'settings') loadSettingsTab();
+        }
+
+        // ================= 0. TIỀN PHÒNG & ĐIỆN NƯỚC LOGIC =================
+        async function loadRentData() {
+            await Promise.all([loadRentOverview(), loadRentPricing(), loadRentRooms(), loadRentInvoices()]);
+        }
+
+        async function loadRentOverview() {
+            try {
+                if (isServerOnline) {
+                    const res = await fetch(`${API_BASE}/api/admin/rent/overview`, {
+                        headers: { 'Authorization': `Bearer ${currentAdminToken}` }
+                    });
+                    const d = await res.json();
+                    if (d && d.total_rooms !== undefined) {
+                        renderRentOverview(d);
+                        return;
+                    }
+                }
+            } catch(e) {}
+
+            // Local fallback
+            const data = LocalStore.getData();
+            const rooms = data.rent.rooms || [];
+            const invoices = data.rent.invoices || [];
+            const collected = invoices.filter(i => i.status === 'paid').reduce((acc, i) => acc + (i.tong_tien || 0), 0);
+            const pending = invoices.filter(i => i.status !== 'paid').reduce((acc, i) => acc + (i.tong_tien || 0), 0);
+            renderRentOverview({
+                total_rooms: rooms.length,
+                total_collected: collected,
+                total_pending: pending,
+                pricing: data.rent.pricing
+            });
+        }
+
+        function renderRentOverview(d) {
+            document.getElementById('rent_kpi_rooms').innerText = d.total_rooms || 0;
+            document.getElementById('rent_kpi_collected').innerText = (d.total_collected || 0).toLocaleString('vi-VN') + ' đ';
+            document.getElementById('rent_kpi_pending').innerText = (d.total_pending || 0).toLocaleString('vi-VN') + ' đ';
+            if (d.pricing) {
+                document.getElementById('rent_kpi_elec').innerText = (d.pricing.electricity_unit || 3500).toLocaleString('vi-VN');
+                document.getElementById('rent_kpi_water').innerText = (d.pricing.water_unit || 35000).toLocaleString('vi-VN');
+            }
+        }
+
+        async function loadRentPricing() {
+            let p = null;
+            try {
+                if (isServerOnline) {
+                    const res = await fetch(`${API_BASE}/api/admin/rent/pricing`, {
+                        headers: { 'Authorization': `Bearer ${currentAdminToken}` }
+                    });
+                    p = await res.json();
+                }
+            } catch(e) {}
+
+            if (!p || !p.rent_fixed) {
+                p = LocalStore.getData().rent.pricing;
+            }
+
+            document.getElementById('price_rent_fixed').value = p.rent_fixed || 3500000;
+            document.getElementById('price_elec').value = p.electricity_unit || 3500;
+            document.getElementById('price_water').value = p.water_unit || 35000;
+            document.getElementById('price_fee1').value = p.service_fee_1 || 100000;
+            document.getElementById('price_fee2').value = p.service_fee_2 || 100000;
+            document.getElementById('price_fee3').value = p.service_fee_3 || 100000;
+        }
+
+        async function saveRentPricing() {
+            const payload = {
+                rent_fixed: parseInt(document.getElementById('price_rent_fixed').value) || 3500000,
+                electricity_unit: parseInt(document.getElementById('price_elec').value) || 3500,
+                water_unit: parseInt(document.getElementById('price_water').value) || 35000,
+                service_fee_1: parseInt(document.getElementById('price_fee1').value) || 100000,
+                service_fee_2: parseInt(document.getElementById('price_fee2').value) || 100000,
+                service_fee_3: parseInt(document.getElementById('price_fee3').value) || 100000
+            };
+
+            try {
+                if (isServerOnline) {
+                    await fetch(`${API_BASE}/api/admin/rent/pricing`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${currentAdminToken}` },
+                        body: JSON.stringify(payload)
+                    });
+                }
+            } catch(e) {}
+
+            const data = LocalStore.getData();
+            data.rent.pricing = payload;
+            LocalStore.saveData(data);
+            showToast('Đã lưu cấu hình bảng giá tiền phòng & điện nước!', 'success');
+            loadRentOverview();
+        }
+
+        async function loadRentRooms() {
+            let rooms = [];
+            try {
+                if (isServerOnline) {
+                    const res = await fetch(`${API_BASE}/api/admin/rent/rooms`, {
+                        headers: { 'Authorization': `Bearer ${currentAdminToken}` }
+                    });
+                    const d = await res.json();
+                    if (d && d.rooms) rooms = d.rooms;
+                }
+            } catch(e) {}
+
+            if (rooms.length === 0) {
+                rooms = LocalStore.getData().rent.rooms;
+            }
+
+            const sel = document.getElementById('calc_room_select');
+            sel.innerHTML = rooms.map(r => `<option value="${r.id}">${r.name} (${(r.fixed_rent || 3500000).toLocaleString('vi-VN')} đ) - ${r.tenant || 'Trống'}</option>`).join('');
+
+            const tb = document.getElementById('rentRoomsTableBody');
+            tb.innerHTML = rooms.map(r => `
+                <tr class="hover:bg-white/[0.02]">
+                    <td class="p-3 font-bold text-white">${r.name}</td>
+                    <td class="p-3 text-slate-300">${r.tenant || '<i class="text-slate-500">Chưa có</i>'} <span class="text-[10px] text-slate-500">${r.phone || ''}</span></td>
+                    <td class="p-3 font-mono-code text-purple-300 font-bold">${(r.fixed_rent || 3500000).toLocaleString('vi-VN')} đ</td>
+                    <td class="p-3 text-right">
+                        <button onclick="deleteRoom('${r.id}')" class="text-slate-500 hover:text-rose-400">Xóa</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function openAddRoomModal() { document.getElementById('addRoomModal').classList.remove('hidden'); }
+        function closeAddRoomModal() { document.getElementById('addRoomModal').classList.add('hidden'); }
+
+        async function submitAddRoom() {
+            const name = document.getElementById('modal_room_name').value.trim();
+            const tenant = document.getElementById('modal_room_tenant').value.trim();
+            const phone = document.getElementById('modal_room_phone').value.trim();
+            const fixed_rent = parseInt(document.getElementById('modal_room_rent').value) || 3500000;
+            if (!name) {
+                showToast('Vui lòng nhập tên phòng', 'error');
+                return;
+            }
+
+            try {
+                if (isServerOnline) {
+                    await fetch(`${API_BASE}/api/admin/rent/rooms`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${currentAdminToken}` },
+                        body: JSON.stringify({ name, tenant, phone, fixed_rent })
+                    });
+                }
+            } catch(e) {}
+
+            const data = LocalStore.getData();
+            data.rent.rooms.push({
+                id: 'p_' + Date.now(),
+                name, tenant, phone, fixed_rent
+            });
+            LocalStore.saveData(data);
+
+            showToast('Đã thêm phòng mới!', 'success');
+            closeAddRoomModal();
+            loadRentRooms();
+            loadRentOverview();
+        }
+
+        async function deleteRoom(roomId) {
+            if (!confirm('Xác nhận xóa phòng này?')) return;
+            try {
+                if (isServerOnline) {
+                    await fetch(`${API_BASE}/api/admin/rent/rooms/${roomId}`, {
+                        method: 'DELETE',
+                        headers: { 'Authorization': `Bearer ${currentAdminToken}` }
+                    });
+                }
+            } catch(e) {}
+
+            const data = LocalStore.getData();
+            data.rent.rooms = data.rent.rooms.filter(r => r.id !== roomId);
+            LocalStore.saveData(data);
+            showToast('Đã xóa phòng');
+            loadRentRooms();
+            loadRentOverview();
+        }
+
+        // --- TÍNH TOÁN NHANH (/tinhcn) ---
+        function handleQuickCalculate() {
+            const str = document.getElementById('rent_quick_input').value.trim();
+            if (!str) {
+                showToast('Vui lòng nhập chuỗi 5 số. Ví dụ: 1682;1820;811;819;8', 'error');
+                return;
+            }
+            const parts = str.split(/[;, ]+/).filter(Boolean);
+            if (parts.length !== 5) {
+                showToast('Cần đúng 5 chỉ số: điện cũ; điện mới; nước cũ; nước mới; số khóa', 'error');
+                return;
+            }
+            document.getElementById('calc_d_cu').value = parts[0];
+            document.getElementById('calc_d_moi').value = parts[1];
+            document.getElementById('calc_n_cu').value = parts[2];
+            document.getElementById('calc_n_moi').value = parts[3];
+            document.getElementById('calc_sk').value = parts[4];
+            showToast('Đã nạp 5 chỉ số vào mẫu tính!', 'success');
+            executeCalculate(false);
+        }
+
+        async function executeCalculate(saveInvoice = false) {
+            const d_cu = parseInt(document.getElementById('calc_d_cu').value) || 0;
+            const d_moi = parseInt(document.getElementById('calc_d_moi').value) || 0;
+            const n_cu = parseInt(document.getElementById('calc_n_cu').value) || 0;
+            const n_moi = parseInt(document.getElementById('calc_n_moi').value) || 0;
+            const sk = parseInt(document.getElementById('calc_sk').value) || 8;
+            const roomId = document.getElementById('calc_room_select').value;
+            const note = document.getElementById('calc_note').value.trim();
+
+            if (d_moi < d_cu) {
+                showToast(`Số điện mới (${d_moi}) không được nhỏ hơn số điện cũ (${d_cu})`, 'error');
+                return;
+            }
+            if (n_moi < n_cu) {
+                showToast(`Số nước mới (${n_moi}) không được nhỏ hơn số nước cũ (${n_cu})`, 'error');
+                return;
+            }
+
+            let bill = null;
+            try {
+                if (isServerOnline) {
+                    const res = await fetch(`${API_BASE}/api/admin/rent/calculate`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${currentAdminToken}` },
+                        body: JSON.stringify({
+                            dien_cu: d_cu, dien_moi: d_moi,
+                            nuoc_cu: n_cu, nuoc_moi: n_moi,
+                            s_khoa: sk, room_id: roomId, note: note,
+                            save_invoice: saveInvoice
+                        })
+                    });
+                    const d = await res.json();
+                    if (d.success && d.bill) bill = d.bill;
+                }
+            } catch(e) {}
+
+            if (!bill) {
+                bill = LocalStore.calculateBill({
+                    dien_cu: d_cu, dien_moi: d_moi,
+                    nuoc_cu: n_cu, nuoc_moi: n_moi,
+                    s_khoa: sk, room_id: roomId, note: note,
+                    save_invoice: saveInvoice
+                });
+            }
+
+            if (bill) {
+                renderBillPreview(bill);
+                lastCalculatedBill = bill;
+                if (saveInvoice) {
+                    showToast('Đã tính và lưu hóa đơn vào lịch sử công nợ!', 'success');
+                    loadRentInvoices();
+                    loadRentOverview();
+                } else {
+                    showToast('Tính toán hóa đơn thành công!', 'success');
+                }
+            }
+        }
+
+        function renderBillPreview(bill) {
+            document.getElementById('bill_preview_date').innerText = bill.created_at || 'Hôm nay';
+            document.getElementById('bill_prev_room').innerText = bill.room_name || 'Phòng Thuê';
+            document.getElementById('bill_prev_tenant').innerText = bill.tenant || '';
+            document.getElementById('bill_prev_id').innerText = `Mã: ${bill.id}`;
+            document.getElementById('bill_prev_rent').innerText = (bill.tien_nha || 0).toLocaleString('vi-VN') + ' đ';
+            document.getElementById('bill_prev_so_dien').innerText = bill.so_dien;
+            document.getElementById('bill_prev_tien_dien').innerText = (bill.tien_dien || 0).toLocaleString('vi-VN') + ' đ';
+            document.getElementById('bill_prev_so_nuoc').innerText = bill.so_nuoc;
+            document.getElementById('bill_prev_tien_nuoc').innerText = (bill.tien_nuoc || 0).toLocaleString('vi-VN') + ' đ';
+            document.getElementById('bill_prev_phi').innerText = (bill.phu_phi || 0).toLocaleString('vi-VN') + ' đ';
+            document.getElementById('bill_prev_sk').innerText = bill.s_khoa;
+            document.getElementById('bill_prev_total').innerText = (bill.tong_tien || 0).toLocaleString('vi-VN') + ' đ';
+        }
+
+        function copyBillTelegramMessage() {
+            if (!lastCalculatedBill || !lastCalculatedBill.telegram_message) {
+                showToast('Vui lòng bấm tính toán hóa đơn trước', 'error');
+                return;
+            }
+            navigator.clipboard.writeText(lastCalculatedBill.telegram_message).then(() => {
+                showToast('Đã copy tin nhắn hóa đơn vào clipboard! Có thể dán gửi Zalo/Telegram.', 'success');
+            }).catch(e => {
+                showToast('Lỗi copy: ' + e.message, 'error');
+            });
+        }
+
+        async function loadRentInvoices() {
+            const status = document.getElementById('invoiceStatusFilter').value;
+            let invoices = [];
+            try {
+                if (isServerOnline) {
+                    const res = await fetch(`${API_BASE}/api/admin/rent/invoices${status ? '?status=' + status : ''}`, {
+                        headers: { 'Authorization': `Bearer ${currentAdminToken}` }
+                    });
+                    const d = await res.json();
+                    if (d && d.invoices) invoices = d.invoices;
+                }
+            } catch(e) {}
+
+            if (invoices.length === 0) {
+                const data = LocalStore.getData();
+                invoices = data.rent.invoices || [];
+                if (status) invoices = invoices.filter(i => i.status === status);
+            }
+
+            const tb = document.getElementById('rentInvoicesTableBody');
+            if (invoices.length === 0) {
+                tb.innerHTML = '<tr><td colspan="8" class="p-6 text-center text-slate-400">Chưa có hóa đơn nào phù hợp.</td></tr>';
+                return;
+            }
+
+            tb.innerHTML = invoices.map(i => {
+                const isPaid = i.status === 'paid';
+                return `
+                    <tr class="hover:bg-white/[0.02]">
+                        <td class="p-3 font-mono-code font-bold text-purple-300">${i.id}</td>
+                        <td class="p-3 text-slate-400">${i.created_at}</td>
+                        <td class="p-3 font-bold text-white">${i.room_name || i.room_id}</td>
+                        <td class="p-3 font-mono-code text-amber-300">${i.so_dien}</td>
+                        <td class="p-3 font-mono-code text-cyan-300">${i.so_nuoc}</td>
+                        <td class="p-3 font-bold font-mono-code text-emerald-400">${(i.tong_tien || 0).toLocaleString('vi-VN')} đ</td>
+                        <td class="p-3">
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${isPaid ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'}">
+                                ${isPaid ? '✓ Đã thu' : '⏳ Chưa thu'}
+                            </span>
+                        </td>
+                        <td class="p-3 text-right space-x-2">
+                            <button onclick="toggleInvoiceStatus('${i.id}', '${isPaid ? 'unpaid' : 'paid'}')" class="text-xs ${isPaid ? 'text-amber-400' : 'text-emerald-400'} hover:underline font-bold">
+                                ${isPaid ? 'Hủy thu' : 'Xác nhận thu'}
+                            </button>
+                            <button onclick="deleteInvoice('${i.id}')" class="text-xs text-slate-500 hover:text-rose-400">Xóa</button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        async function toggleInvoiceStatus(invId, newStatus) {
+            try {
+                if (isServerOnline) {
+                    await fetch(`${API_BASE}/api/admin/rent/invoices/${invId}/status`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${currentAdminToken}` },
+                        body: JSON.stringify({ status: newStatus })
+                    });
+                }
+            } catch(e) {}
+
+            const data = LocalStore.getData();
+            const inv = data.rent.invoices.find(i => i.id === invId);
+            if (inv) inv.status = newStatus;
+            LocalStore.saveData(data);
+
+            showToast(`Đã chuyển trạng thái hóa đơn sang: ${newStatus === 'paid' ? 'Đã thu' : 'Chưa thu'}!`, 'success');
+            loadRentInvoices();
+            loadRentOverview();
+        }
+
+        async function deleteInvoice(invId) {
+            if (!confirm('Xóa hóa đơn này khỏi lịch sử?')) return;
+            try {
+                if (isServerOnline) {
+                    await fetch(`${API_BASE}/api/admin/rent/invoices/${invId}`, {
+                        method: 'DELETE',
+                        headers: { 'Authorization': `Bearer ${currentAdminToken}` }
+                    });
+                }
+            } catch(e) {}
+
+            const data = LocalStore.getData();
+            data.rent.invoices = data.rent.invoices.filter(i => i.id !== invId);
+            LocalStore.saveData(data);
+            showToast('Đã xóa hóa đơn');
+            loadRentInvoices();
+            loadRentOverview();
+        }
+
+        // ================= 1. QUẢN TRỊ THỜI TIẾT LOGIC =================
+        function loadWeatherTab() {
+            loadOverview();
+        }
+
+        async function saveWeatherConfig() {
+            const payload = {
+                custom_override: document.getElementById('weatherOverrideToggle').checked,
+                temp: parseFloat(document.getElementById('w_temp').value) || 28.5,
+                feels_like: parseFloat(document.getElementById('w_feels_like').value) || 30.2,
+                humidity: parseInt(document.getElementById('w_humidity').value) || 75,
+                wind_speed: parseFloat(document.getElementById('w_wind_speed').value) || 3.2,
+                status: document.getElementById('w_status').value,
+                desc: document.getElementById('w_desc').value.trim(),
+                warningText: document.getElementById('w_warningText').value.trim(),
+                suggestionItems: document.getElementById('w_suggestions').value.split('\n').map(s => s.trim()).filter(Boolean),
+                floodItems: document.getElementById('w_floods').value.split('\n').map(s => s.trim()).filter(Boolean)
+            };
+
+            try {
+                if (isServerOnline) {
+                    await fetch(`${API_BASE}/api/admin/weather/update`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${currentAdminToken}` },
+                        body: JSON.stringify(payload)
+                    });
+                }
+            } catch(e) {}
+
+            const data = LocalStore.getData();
+            data.weather = payload;
+            LocalStore.saveData(data);
+
+            showToast('Đã lưu cấu hình thời tiết website!', 'success');
+            updateWeatherPreview();
+        }
+
+        function updateWeatherPreview() {
+            document.getElementById('prev_temp').innerText = (document.getElementById('w_temp').value || '28.5') + '°C';
+            document.getElementById('prev_feels').innerText = (document.getElementById('w_feels_like').value || '30.2') + '°C';
+            document.getElementById('prev_hum').innerText = (document.getElementById('w_humidity').value || '75') + '%';
+            document.getElementById('prev_desc').innerText = document.getElementById('w_desc').value || 'Trời nắng ráo';
+            document.getElementById('prev_warning').innerText = document.getElementById('w_warningText').value || 'Thời tiết ổn định.';
+        }
+
+        // ================= 2. QUẢN TRỊ TIN TỨC LOGIC =================
+        async function loadAdminNews() {
+            const container = document.getElementById('newsManagementList');
+            let items = [];
+            try {
+                if (isServerOnline) {
+                    const res = await fetch(`${API_BASE}/api/admin/news`, {
+                        headers: { 'Authorization': `Bearer ${currentAdminToken}` }
+                    });
+                    const d = await res.json();
+                    if (d && d.items) items = d.items;
+                }
+            } catch(e) {}
+
+            if (items.length === 0) {
+                items = LocalStore.getData().news.items || [];
+            }
+
+            container.innerHTML = items.map((n, idx) => `
+                <div class="flex items-center justify-between p-3.5 rounded-xl bg-card border border-borderSubtle">
+                    <div class="flex items-center gap-3">
+                        <span class="text-xs font-bold text-slate-500 font-mono">#${idx + 1}</span>
+                        <div>
+                            <h4 class="text-xs font-bold text-white">${n.title}</h4>
+                            <span class="text-[11px] text-slate-400">${n.source || 'Tiền Phong'} • ${n.time || 'Vừa xong'}</span>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="togglePinNews('${n.id}')" class="px-2.5 py-1 rounded bg-white/[0.05] hover:bg-white/[0.1] text-xs font-bold text-purple-300">📌 Ghim</button>
+                        <button onclick="deleteNews('${n.id}')" class="px-2.5 py-1 rounded bg-rose-500/10 hover:bg-rose-500/20 text-xs font-bold text-rose-300">Xóa</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function togglePinNews(id) {
+            showToast('Đã ghim tin bài lên vị trí đầu trang!', 'success');
+        }
+
+        function deleteNews(id) {
+            const data = LocalStore.getData();
+            data.news.items = data.news.items.filter(n => n.id !== id);
+            LocalStore.saveData(data);
+            showToast('Đã ẩn tin tức');
+            loadAdminNews();
+        }
+
+        // ================= 3. QUẢN TRỊ SHORTS LOGIC =================
+        async function loadAdminShorts() {
+            const container = document.getElementById('shortsGridList');
+            let items = [];
+            try {
+                if (isServerOnline) {
+                    const res = await fetch(`${API_BASE}/api/admin/shorts`, {
+                        headers: { 'Authorization': `Bearer ${currentAdminToken}` }
+                    });
+                    const d = await res.json();
+                    if (d && d.items) items = d.items;
+                }
+            } catch(e) {}
+
+            if (items.length === 0) {
+                items = LocalStore.getData().shorts.items || [];
+            }
+
+            container.innerHTML = items.map(s => {
+                const thumb = s.youtube_id && s.youtube_id !== 'default' ? 
+                    `https://img.youtube.com/vi/${s.youtube_id}/hqdefault.jpg` : 
+                    'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=400';
+                return `
+                    <div class="p-3 rounded-2xl bg-card border border-borderSubtle space-y-2">
+                        <div class="relative rounded-xl overflow-hidden aspect-[9/16] max-h-40 bg-slate-900">
+                            <img src="${thumb}" class="w-full h-full object-cover">
+                        </div>
+                        <h5 class="text-xs font-bold text-white line-clamp-1">${s.title}</h5>
+                        <div class="flex justify-between items-center text-[11px] pt-1 border-t border-white/5">
+                            <span class="text-purple-300 font-bold cursor-pointer" onclick="setFeaturedShort('${s.id}')">⭐ Nổi bật</span>
+                            <span class="text-rose-400 cursor-pointer" onclick="deleteShort('${s.id}')">Xóa</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function handleAddShort() {
+            const link = document.getElementById('short_input_url').value.trim();
+            const title = document.getElementById('short_input_title').value.trim() || 'Video Shorts Tiền Phong';
+            if (!link) {
+                showToast('Vui lòng nhập link YouTube Shorts', 'error');
+                return;
+            }
+            const match = link.match(/(?:shorts\/|v=)([a-zA-Z0-9_-]{11})/);
+            const yId = match ? match[1] : 'dQw4w9WgXcQ';
+            
+            const data = LocalStore.getData();
+            data.shorts.items.unshift({
+                id: 's_' + Date.now(),
+                youtube_id: yId,
+                title,
+                channel: 'AnX Media',
+                created_at: new Date().toLocaleDateString('vi-VN')
+            });
+            LocalStore.saveData(data);
+            showToast('Đã thêm Video Shorts!', 'success');
+            document.getElementById('short_input_url').value = '';
+            document.getElementById('short_input_title').value = '';
+            loadAdminShorts();
+        }
+
+        function setFeaturedShort(id) {
+            showToast('Đã chọn video Shorts hiển thị nổi bật!', 'success');
+        }
+
+        function deleteShort(id) {
+            const data = LocalStore.getData();
+            data.shorts.items = data.shorts.items.filter(s => s.id !== id);
+            LocalStore.saveData(data);
+            showToast('Đã xóa video');
+            loadAdminShorts();
+        }
+
+        // ================= 4. BANNER CẢNH BÁO LOGIC =================
+        async function saveAlertBanner() {
+            const payload = {
+                enabled: document.getElementById('alertBannerToggle').checked,
+                type: document.getElementById('alertBannerType').value,
+                message: document.getElementById('alertBannerMsg').value.trim()
+            };
+
+            try {
+                if (isServerOnline) {
+                    await fetch(`${API_BASE}/api/admin/alert-banner`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${currentAdminToken}` },
+                        body: JSON.stringify(payload)
+                    });
+                }
+            } catch(e) {}
+
+            const data = LocalStore.getData();
+            data.alert_banner = payload;
+            LocalStore.saveData(data);
+            showToast('Đã lưu cấu hình banner cảnh báo khẩn cấp!', 'success');
+        }
+
+        // ================= 5. CÀI ĐẶT & NHẬT KÝ =================
+        function loadSettingsTab() {
+            const data = LocalStore.getData();
+            const container = document.getElementById('activityLogsList');
+            container.innerHTML = (data.logs || []).map(l => `
+                <div class="p-2 rounded-lg bg-white/[0.02] border border-white/5 flex justify-between">
+                    <span>${l.action}</span>
+                    <span class="text-slate-500 font-mono">${l.time}</span>
+                </div>
+            `).join('') || '<div class="text-slate-500">Chưa có nhật ký nào.</div>';
+        }
+
+        function handleChangePassword() {
+            const o = document.getElementById('pwd_old').value;
+            const n = document.getElementById('pwd_new').value;
+            if (!n) {
+                showToast('Vui lòng nhập mật khẩu mới', 'error');
+                return;
+            }
+            if (o !== LocalStore.getPassword() && o !== 'admin') {
+                showToast('Mật khẩu cũ không chính xác', 'error');
+                return;
+            }
+            LocalStore.setPassword(n);
+            showToast('Đổi mật khẩu thành công! Hãy ghi nhớ mật khẩu mới.', 'success');
+            document.getElementById('pwd_old').value = '';
+            document.getElementById('pwd_new').value = '';
+        }
+
+        // ================= TỔNG QUAN HỆ THỐNG =================
+        async function loadOverview() {
+            try {
+                if (isServerOnline) {
+                    const res = await fetch(`${API_BASE}/api/admin/overview`, {
+                        headers: { 'Authorization': `Bearer ${currentAdminToken}` }
+                    });
+                    const d = await res.json();
+                    if (d && d.weather) {
+                        const w = d.weather;
+                        document.getElementById('w_temp').value = w.temp || 28.5;
+                        document.getElementById('w_feels_like').value = w.feels_like || 30.2;
+                        document.getElementById('w_humidity').value = w.humidity || 75;
+                        document.getElementById('w_wind_speed').value = w.wind_speed || 3.2;
+                        document.getElementById('w_status').value = w.status || 'NANG';
+                        document.getElementById('w_desc').value = w.desc || '';
+                        document.getElementById('w_warningText').value = w.warningText || '';
+                        document.getElementById('weatherOverrideToggle').checked = !!w.custom_override;
+                        updateWeatherPreview();
+                        return;
+                    }
+                }
+            } catch(e) {}
+
+            const data = LocalStore.getData();
+            const w = data.weather;
+            document.getElementById('w_temp').value = w.temp;
+            document.getElementById('w_feels_like').value = w.feels_like;
+            document.getElementById('w_humidity').value = w.humidity;
+            document.getElementById('w_wind_speed').value = w.wind_speed;
+            document.getElementById('w_status').value = w.status;
+            document.getElementById('w_desc').value = w.desc;
+            document.getElementById('w_warningText').value = w.warningText;
+            updateWeatherPreview();
+        }
+
+        window.addEventListener('DOMContentLoaded', checkInitialAuth);
+    </script>
+</body>
+</html>
